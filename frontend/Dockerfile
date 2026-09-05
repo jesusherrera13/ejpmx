@@ -4,6 +4,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
+
+# Aumentar el límite de memoria del V8 Engine a 4GB
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
 # Etapa de producción
