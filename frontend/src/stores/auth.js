@@ -29,7 +29,7 @@ export const useAuthStore = defineStore('auth', {
     }),
     actions: {
         async login(email, password) { // Eliminados los tipos de TypeScript
-            const response = await axiosClient.post(`/login/`, { email, password });
+            const response = await axiosClient.post(`/login`, { email, password });
 
             if (response.status) {
                 this.user = response.data;
