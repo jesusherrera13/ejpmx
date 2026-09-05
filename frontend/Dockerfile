@@ -1,13 +1,13 @@
-FROM node:20-alpine
-
+# Etapa de compilación
+FROM node:20-alpine as build
 WORKDIR /app
-
-# Copiamos primero los archivos de dependencias para aprovechar la caché de Docker
 COPY package*.json ./
 RUN npm install
-
-# Copiamos el resto del proyecto
 COPY . .
+RUN npm run build
 
-# Exponemos el host para que Vite sea accesible fuera del contenedor
-CMD ["npm", "run", "dev", "--", "--host"]
+# Etapa de producción
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
