@@ -12,7 +12,7 @@ services:
       - DB_CONNECTION=pgsql
       - DB_HOST=global_postgres
       - DB_PORT=5432
-      - DB_DATABASE=ejpmx_db
+      - DB_DATABASE=${DB_DATABASE}
       - DB_USERNAME=${DB_USERNAME}
       - DB_PASSWORD=${DB_PASSWORD}
     command: sh -c "php artisan migrate --force && php-fpm"
