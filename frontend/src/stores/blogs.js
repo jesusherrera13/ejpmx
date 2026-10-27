@@ -10,6 +10,20 @@ export const useBlogsStore = defineStore('blogs', {
   }),
 
   actions: {
+    async deleteItem(id) {
+      this.loading = true
+      try {
+        await axiosClient.delete(`/blog/${id}`)
+        this.posts = this.posts.filter(item => item.id !== id)
+        return true
+      } catch (err) {
+        console.error('Error deleting post:', err)
+        throw err
+      } finally {
+        this.loading = false
+      }
+    },
+
     async fetchPosts() {
       this.loading = true
       this.error = null

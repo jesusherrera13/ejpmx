@@ -49,6 +49,9 @@ export default defineConfig({
     port: 5173,
     watch: {
       usePolling: true // <-- Ayuda a que el Hot Reload funcione en Windows/Mac con Docker
+    },
+    proxy: {
+      '/api': 'http://localhost' // <-- En `npm run dev`, envía /api al nginx de Docker
     }
   }
 })

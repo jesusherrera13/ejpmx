@@ -1,10 +1,11 @@
 <template>
   <v-app class="bg-mlb-dark">
     <v-container class="fill-height d-flex align-center justify-center" fluid>
-      <v-card width="100%" max-width="440" class="pa-8 rounded-lg text-center" flat elevation="3">
-        
+      <!-- theme="light": la tarjeta siempre es blanca aunque el sistema esté en modo oscuro -->
+      <v-card theme="light" color="white" width="100%" max-width="390" class="login-card rounded-lg" flat>
+
         <!-- Logo de la MLB -->
-        <div class="d-flex justify-center mb-6">
+        <div class="d-flex justify-center mb-10">
           <div class="mlb-logo-badge">
             <span class="blue-side"></span>
             <v-icon icon="mdi-baseball" class="baseball-icon text-white" size="24" />
@@ -13,51 +14,49 @@
         </div>
 
         <!-- Título -->
-        <h1 class="text-h5 font-weight-black text-left text-grey-darken-4 line-height-tight mb-3">
+        <h1 class="login-title mb-2">
           Introduce tu Dirección de Email
         </h1>
 
         <!-- Subtítulo -->
-        <p class="text-body-2 text-left text-grey-darken-2 mb-6">
+        <p class="login-subtitle mb-4">
           Introduce la dirección de email para tu cuenta MLB.
         </p>
 
         <!-- Formulario -->
         <v-form @submit.prevent="handleContinue">
-          <div class="text-left text-caption font-weight-bold text-grey-darken-3 mb-1">
-            Correo electrónico
-          </div>
+          <label class="field-label" for="login-email">Correo electrónico</label>
           <v-text-field
+            id="login-email"
             v-model="email"
             variant="outlined"
-            density="comfortable"
-            placeholder="ejemplo@correo.com"
             color="black"
             class="mb-4 text-field-custom"
             hide-details="auto"
             type="email"
+            autocomplete="email"
             required
           />
 
+          <label class="field-label" for="login-password">Contraseña</label>
           <v-text-field
+            id="login-password"
             v-model="password"
             variant="outlined"
-            density="comfortable"
-            placeholder="Password"
             color="black"
             class="mb-4 text-field-custom"
             hide-details="auto"
             type="password"
+            autocomplete="current-password"
             required
           />
 
           <!-- Botón Continuar con estado de carga y bloqueo -->
           <v-btn
             type="submit"
-            color="black"
             block
-            size="large"
-            class="text-capitalize rounded-pill font-weight-bold my-4 btn-continue"
+            height="50"
+            class="text-none rounded-pill btn-continue"
             flat
             :loading="isLoading"
             :disabled="isLoading"
@@ -67,47 +66,27 @@
         </v-form>
 
         <!-- Enlaces de soporte/registro -->
-        <div class="mt-6 mb-8">
-          <a href="#" class="text-decoration-none text-blue-dark font-weight-bold d-block mb-2 text-body-2">
+        <div class="text-center mt-12 mb-10 login-links">
+          <a href="#" class="link-blue d-block mb-1">
             ¿Necesitas ayuda?
           </a>
-          <div class="text-body-2 text-grey-darken-3">
-            ¿Eres Nuevo a MLB? 
-            <a href="#" class="text-decoration-none text-blue-dark font-weight-bold ml-1">
-              Inscríbete
-            </a>
+          <div>
+            ¿Eres Nuevo a MLB?
+            <a href="#" class="link-blue ml-1">Inscríbete</a>
           </div>
         </div>
 
         <!-- Footer legal -->
-        <p class="text-xxs text-grey-darken-1 leading-normal px-2">
-          Al iniciar sesión, entiendo y acepto estar sujeto a los 
-          <a href="#" class="text-decoration-none text-blue-dark font-weight-bold">Términos de Uso</a> 
-          y la 
-          <a href="#" class="text-decoration-none text-blue-dark font-weight-bold">Política de Privacidad</a> 
+        <p class="login-legal text-center px-2">
+          Al iniciar sesión, entiendo y acepto estar sujeto a los
+          <a href="#" class="link-blue">Términos de Uso</a>
+          y la
+          <a href="#" class="link-blue">Política de Privacidad</a>
           de MLB.com.
         </p>
       </v-card>
     </v-container>
 
-    <!-- Notificación de Error -->
-    <v-snackbar
-      v-model="showError"
-      color="error"
-      timeout="4000"
-      location="top"
-    >
-      {{ errorMessage }}
-      <template v-slot:actions>
-        <v-btn
-          color="white"
-          variant="text"
-          @click="showError = false"
-        >
-          Cerrar
-        </v-btn>
-      </template>
-    </v-snackbar>
   </v-app>
 </template>
 
@@ -115,21 +94,20 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth';
+import { useNotificationsStore } from '@/stores/notifications';
+import { getErrorMessage } from '@/utils/errors';
 
-const email = ref('eljuegoperfectomx13@gmail.com');
-const password = ref('S3v0y4$123');
+const email = ref('');
+const password = ref('');
 
-// Nuevas variables de estado para la UI
+// Estado de la UI; los errores se muestran en el toast global
 const isLoading = ref(false);
-const showError = ref(false);
-const errorMessage = ref('');
+const notify = useNotificationsStore();
 
 const router = useRouter()
 
 const handleContinue = async () => {
-  // 1. Iniciamos el estado de carga y ocultamos errores previos
   isLoading.value = true;
-  showError.value = false;
 
   try {
     const authStore = useAuthStore();
@@ -138,23 +116,13 @@ const handleContinue = async () => {
     if (authStore.user) {
       router.push('/');
     } else {
-      errorMessage.value = response.message || 'Error desconocido al iniciar sesión.';
-      showError.value = true;
+      notify.error(response.message || 'Error desconocido al iniciar sesión.');
     }
   } catch (error) {
     console.error(error);
-    const data = error.response?.data;
-    
-    // 2. Evaluamos la respuesta de Django para mostrar un mensaje amigable al usuario
-    if (data?.detail === "No active account found with the given credentials") { //
-      errorMessage.value = 'El correo o la contraseña son incorrectos.'; //[cite: 1]
-    } else {
-      errorMessage.value = data?.detail || data?.message || 'Ocurrió un error de conexión con el servidor.';
-    }
-    
-    showError.value = true;
+    notify.error(getErrorMessage(error, 'Ocurrió un error de conexión con el servidor.'));
   } finally {
-    // 3. Apagamos el estado de carga sin importar si fue exitoso o falló
+    // Apagamos el estado de carga sin importar si fue exitoso o falló
     isLoading.value = false;
   }
 }
@@ -163,27 +131,64 @@ const handleContinue = async () => {
 <style scoped>
 /* Fondo oficial Azul Oscuro MLB */
 .bg-mlb-dark {
-  background-color: #0a2240 !important;
+  background-color: #041e42 !important;
+}
+
+/* Tarjeta blanca */
+.login-card {
+  padding: 56px 26px 24px;
+  color: #000;
+}
+
+/* Tipografía */
+.login-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #000;
+  text-align: left;
+}
+.login-subtitle {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #000;
+  text-align: left;
+}
+.field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #000;
+  text-align: left;
+  margin-bottom: 4px;
+}
+.login-links {
+  font-size: 0.875rem;
+  color: #000;
+}
+.login-legal {
+  font-size: 0.69rem;
+  line-height: 1.6;
+  color: #000;
 }
 
 /* Color azul para los enlaces */
-.text-blue-dark {
-  color: #002d62 !important;
+.link-blue {
+  color: #0d5cc4;
+  font-weight: 700;
+  text-decoration: none;
 }
-
-/* Tipografía de tamaño extra pequeño para el disclaimer */
-.text-xxs {
-  font-size: 0.68rem !important;
-  line-height: 1.4;
+.link-blue:hover {
+  text-decoration: underline;
 }
 
 /* Recreación CSS del Logo MLB (Silueta azul y roja) */
 .mlb-logo-badge {
   display: flex;
   position: relative;
-  width: 72px;
-  height: 38px;
-  border-radius: 6px;
+  width: 74px;
+  height: 40px;
+  border-radius: 4px;
   overflow: hidden;
   align-items: center;
   justify-content: center;
@@ -194,7 +199,7 @@ const handleContinue = async () => {
   top: 0;
   width: 50%;
   height: 100%;
-  background-color: #002d62;
+  background-color: #041e42;
 }
 .red-side {
   position: absolute;
@@ -202,7 +207,7 @@ const handleContinue = async () => {
   top: 0;
   width: 50%;
   height: 100%;
-  background-color: #ba0021;
+  background-color: #bf0d3e;
 }
 .baseball-icon {
   position: relative;
@@ -210,18 +215,27 @@ const handleContinue = async () => {
 }
 
 /* Estilización fina del input text de Vuetify */
-.text-field-custom :deep(.v-field__outline) {
-  --v-field-border-width: 1px !important;
-  --v-field-border-opacity: 1 !important;
-  border-color: #8c8c8c !important;
+.text-field-custom :deep(.v-field) {
+  border-radius: 4px;
+  background-color: #fff;
 }
-.text-field-custom :deep(.v-field--focused .v-field__outline) {
-  border-color: #000000 !important;
+.text-field-custom :deep(.v-field__input) {
+  min-height: 52px;
+  color: #000;
+}
+.text-field-custom :deep(.v-field__outline) {
+  --v-field-border-width: 1px;
+  --v-field-border-opacity: 1;
+  color: #000;
 }
 
-/* Efecto hover del botón de continuar */
+/* Botón Continuar */
 .btn-continue {
-  letter-spacing: 0.5px;
+  background-color: #060a0d !important;
+  color: #fff !important;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0;
   transition: opacity 0.2s;
 }
 .btn-continue:hover {

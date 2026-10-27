@@ -33,7 +33,7 @@
               </v-col>
 
               <!-- Short Name -->
-              <v-col cols="12" sm="8">
+              <v-col cols="12">
                 <v-text-field
                   v-model="formData.short_name"
                   label="Nombre Corto (Ej: Atléticos)"
@@ -46,7 +46,7 @@
               </v-col>
 
               <!-- Abbreviation -->
-              <v-col cols="12" sm="4">
+              <v-col cols="12">
                 <v-text-field
                   v-model="formData.abbreviation"
                   label="Abreviación (Ej: OAK)"

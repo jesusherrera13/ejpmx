@@ -31,4 +31,12 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    // Roles que ven y administran los registros de todos los usuarios
+    public const ADMIN_ROLES = ['Master', 'Administrador'];
+
+    public function isAdmin(): bool
+    {
+        return $this->hasAnyRole(self::ADMIN_ROLES);
+    }
 }

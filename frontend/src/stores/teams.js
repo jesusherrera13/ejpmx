@@ -1,6 +1,7 @@
 // src/stores/teams.js
 import { defineStore } from 'pinia'
 import axiosClient from '@/axios'
+import { downloadFile } from '@/utils/download'
 
 export const useTeamsStore = defineStore('teams', {
   state: () => ({
@@ -10,6 +11,20 @@ export const useTeamsStore = defineStore('teams', {
   }),
 
   actions: {
+    async deleteItem(id) {
+      this.loading = true
+      try {
+        await axiosClient.delete(`/teams/${id}`)
+        this.teams = this.teams.filter(item => item.id !== id)
+        return true
+      } catch (err) {
+        console.error('Error deleting team:', err)
+        throw err
+      } finally {
+        this.loading = false
+      }
+    },
+
     async fetchTeams() {
       this.loading = true
       this.error = null
@@ -49,6 +64,28 @@ export const useTeamsStore = defineStore('teams', {
         return true
       } catch (err) {
         console.error('Error updating team:', err)
+        throw err
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // Descarga la plantilla de Excel para la carga masiva
+    async downloadTemplate() {
+      await downloadFile('/teams/template', 'ejpmx_plantilla_equipos.xlsx')
+    },
+
+    // Sube un Excel (Nombre | Nombre Corto | Abreviación); crea o actualiza por nombre
+    async importFile(file) {
+      this.loading = true
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        const response = await axiosClient.post('/teams/import', formData)
+        await this.fetchTeams()
+        return response.data
+      } catch (err) {
+        console.error('Error importing teams:', err)
         throw err
       } finally {
         this.loading = false

@@ -57,7 +57,7 @@
               </v-col>
 
               <!-- Birthdate -->
-              <v-col cols="12" sm="6">
+              <v-col cols="12">
                 <v-text-field
                   v-model="formData.birthdate"
                   label="Fecha de Nacimiento"
@@ -69,7 +69,7 @@
               </v-col>
 
               <!-- CURP -->
-              <v-col cols="12" sm="6">
+              <v-col cols="12">
                 <v-text-field
                   v-model="formData.curp"
                   label="CURP"

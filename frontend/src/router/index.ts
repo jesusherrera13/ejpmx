@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Home from '@/views/Home.vue'
 import Login from '@/views/Login.vue'
 import AdminDashboardView from '@/views/AdminDashboardView.vue'
+import TournamentConfigurationView from '@/views/TournamentConfigurationView.vue'
 
 const routes = [
   {
@@ -19,6 +20,12 @@ const routes = [
     path: '/admin/dashboard',
     name: 'AdminDashboard',
     component: AdminDashboardView
+  },
+  {
+    path: '/tournament/:id/configuration',
+    name: 'TournamentConfiguration',
+    component: TournamentConfigurationView,
+    props: true
   }
 ]
 

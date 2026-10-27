@@ -60,7 +60,7 @@ export const useAuthStore = defineStore('auth', {
                 
             }
             catch (error) { // Eliminado ': any'
-                if (error.response?.data?.message !== 'Unauthenticated.') {
+                if (error.response?.status !== 401) { // 401: la sesión ya había expirado
                     throw error;
                 }
                 this.user = {id: '', name: '', email: '', initial: ''};
