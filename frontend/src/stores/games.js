@@ -2,6 +2,7 @@
 // Rol de juegos (calendario) de un torneo
 import { defineStore } from 'pinia'
 import axiosClient from '@/axios'
+import { downloadFile } from '@/utils/download'
 
 export const useGamesStore = defineStore('games', {
   state: () => ({
@@ -26,6 +27,25 @@ export const useGamesStore = defineStore('games', {
       } catch (err) {
         console.error('Error fetching games:', err)
         this.error = 'Could not load the calendar.'
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // format: 'xlsx' o 'pdf'; view: 'games' (partidos) o 'series'
+    async exportCalendar(tournamentId, format, view, filename) {
+      await downloadFile(`/tournaments/${tournamentId}/games/export/${format}?view=${view}`, filename)
+    },
+
+    // Calendario calculado con las opciones, sin guardarlo
+    async preview(tournamentId, options) {
+      this.loading = true
+      try {
+        const response = await axiosClient.post(`/tournaments/${tournamentId}/games/preview`, options)
+        return response.data
+      } catch (err) {
+        console.error('Error previewing calendar:', err)
+        throw err
       } finally {
         this.loading = false
       }

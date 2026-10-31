@@ -16,12 +16,17 @@ class Tournament extends Model
     protected $fillable = [
         'user_id',
         'name',
+        'games_per_series',
         'is_active',
     ];
 
     protected $casts = [
+        'games_per_series' => 'integer',
         'is_active' => 'boolean',
     ];
+
+    // Valores permitidos para los juegos de cada serie
+    public const GAMES_PER_SERIES_OPTIONS = [1, 2, 3];
 
     // Equipos inscritos, en el orden en que se agregaron
     public function teams(): BelongsToMany

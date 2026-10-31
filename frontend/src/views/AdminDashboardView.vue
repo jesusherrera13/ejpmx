@@ -602,6 +602,7 @@ const playerHeaders = [
 const tournamentHeaders = [
   { title: 'ID', key: 'id' },
   { title: 'Torneo', key: 'name' },
+  { title: 'Juegos por serie', key: 'games_per_series', align: 'center' },
   { title: 'Estado', key: 'is_active', align: 'center' },
   { title: 'Acciones', key: 'actions', align: 'center', sortable: false }
 ]

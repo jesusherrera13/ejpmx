@@ -52,6 +52,9 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
 
     // GAME
     Route::get('/tournaments/{tournament}/games', [GameController::class, 'index']);
+    Route::get('/tournaments/{tournament}/games/export/xlsx', [GameController::class, 'exportXlsx']);
+    Route::get('/tournaments/{tournament}/games/export/pdf', [GameController::class, 'exportPdf']);
+    Route::post('/tournaments/{tournament}/games/preview', [GameController::class, 'preview']);
     Route::post('/tournaments/{tournament}/games/generate', [GameController::class, 'generate']);
     Route::delete('/tournaments/{tournament}/games', [GameController::class, 'destroy']);
 

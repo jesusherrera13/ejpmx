@@ -45,6 +45,7 @@
             <th>Local</th>
             <th>Fechas</th>
             <th class="text-center">Juegos</th>
+            <th v-if="showActions"></th>
           </tr>
         </thead>
         <thead v-else>
@@ -56,12 +57,13 @@
             <th>Local</th>
             <th class="text-center">Juego</th>
             <th class="text-center">Resultado</th>
+            <th v-if="showActions"></th>
           </tr>
         </thead>
 
         <tbody v-for="matchday in visibleMatchdays" :key="matchday.number">
           <tr class="schedule-table__group">
-            <td :colspan="view === 'series' ? 6 : 7">
+            <td :colspan="(view === 'series' ? 6 : 7) + (showActions ? 1 : 0)">
               <span class="font-weight-bold text-grey-darken-4">Jornada {{ matchday.number }}</span>
               <span class="text-grey-darken-1"> · Vuelta {{ matchday.round }} · {{ formatRange(matchday.start, matchday.end) }}</span>
               <span v-if="matchday.bye" class="text-grey-darken-1"> · Descansa <strong class="text-grey-darken-3">{{ matchday.bye.name }}</strong></span>
@@ -76,11 +78,22 @@
               <td class="font-weight-bold text-black">{{ series.home.name }}</td>
               <td class="text-grey-darken-2">{{ formatRange(series.start, series.end) }}</td>
               <td class="text-center text-grey-darken-2">{{ series.games.length }}</td>
+              <td v-if="showActions" class="text-center">
+                <v-menu location="bottom end">
+                  <template v-slot:activator="{ props: menuProps }">
+                    <v-btn v-bind="menuProps" icon="mdi-dots-vertical" size="x-small" variant="text" color="grey-darken-1" title="Opciones" />
+                  </template>
+                  <v-list density="compact" class="py-1">
+                    <v-list-item prepend-icon="mdi-pencil" title="Editar" @click="emit('edit', series)" />
+                    <v-list-item prepend-icon="mdi-clipboard-text-outline" title="Boxscore" @click="emit('boxscore', series)" />
+                  </v-list>
+                </v-menu>
+              </td>
             </tr>
           </template>
 
           <template v-else>
-            <tr v-for="game in matchday.games" :key="game.id">
+            <tr v-for="game in matchday.games" :key="game.game_number">
               <td class="text-grey-darken-1">{{ game.game_number }}</td>
               <td class="text-grey-darken-2 text-no-wrap">{{ formatDate(game.scheduled_date) }}</td>
               <td class="text-right font-weight-bold text-black">{{ game.away_team.name }}</td>
@@ -90,6 +103,17 @@
               <td class="text-center text-grey-darken-2">
                 <template v-if="game.away_score !== null && game.home_score !== null">{{ game.away_score }} - {{ game.home_score }}</template>
                 <span v-else class="text-grey">—</span>
+              </td>
+              <td v-if="showActions" class="text-center">
+                <v-menu location="bottom end">
+                  <template v-slot:activator="{ props: menuProps }">
+                    <v-btn v-bind="menuProps" icon="mdi-dots-vertical" size="x-small" variant="text" color="grey-darken-1" title="Opciones" />
+                  </template>
+                  <v-list density="compact" class="py-1">
+                    <v-list-item prepend-icon="mdi-pencil" title="Editar" @click="emit('edit', game)" />
+                    <v-list-item prepend-icon="mdi-clipboard-text-outline" title="Boxscore" @click="emit('boxscore', game)" />
+                  </v-list>
+                </v-menu>
               </td>
             </tr>
           </template>
@@ -110,8 +134,13 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   // 'games' (un renglón por partido) o 'series'
   defaultView: { type: String, default: 'games' },
-  emptyText: { type: String, default: 'El torneo aún no tiene calendario.' }
+  emptyText: { type: String, default: 'El torneo aún no tiene calendario.' },
+  // Menú de opciones (Editar, Boxscore) en cada renglón
+  showActions: { type: Boolean, default: false }
 })
+
+// Reciben el partido (vista Partidos) o la serie con sus partidos (vista Series)
+const emit = defineEmits(['edit', 'boxscore'])
 
 const view = ref(props.defaultView)
 const teamFilter = ref(null)

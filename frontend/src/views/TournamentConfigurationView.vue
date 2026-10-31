@@ -1,7 +1,8 @@
 <!-- src/views/TournamentConfigurationView.vue -->
 <!-- Configuración de un torneo: equipos participantes y rol de juegos -->
 <template>
-  <v-app class="bg-admin-grey">
+  <!-- Tema claro fijo: con el tema del sistema en oscuro los campos quedaban blancos sobre blanco -->
+  <v-app class="bg-admin-grey" theme="light">
 
     <!-- BARRA SUPERIOR -->
     <v-app-bar flat color="white" class="border-bottom px-4" height="64">
@@ -119,7 +120,41 @@
                 <span class="font-weight-bold text-grey-darken-4">Parámetros del rol de juegos</span>
               </div>
               <div class="pa-4">
-                <v-row dense align="center">
+                <!-- Calendario guardado: los parámetros ya no se modifican -->
+                <v-row v-if="hasCalendar" dense align="center">
+                  <v-col v-for="param in savedParams" :key="param.label" cols="6" sm="3" md="2">
+                    <div class="text-caption text-grey-darken-1">{{ param.label }}</div>
+                    <div class="text-body-2 font-weight-bold text-grey-darken-4">{{ param.value }}</div>
+                  </v-col>
+                  <v-col cols="12" md="4" class="d-flex justify-md-end">
+                    <v-menu location="bottom end">
+                      <template v-slot:activator="{ props: menuProps }">
+                        <v-btn
+                          v-bind="menuProps"
+                          color="black"
+                          size="small"
+                          variant="outlined"
+                          class="text-none font-weight-bold rounded-pill"
+                          append-icon="mdi-chevron-down"
+                          :loading="isExporting"
+                        >
+                          Opciones
+                        </v-btn>
+                      </template>
+                      <v-list density="compact" class="py-1">
+                        <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF Partidos" @click="exportCalendar('pdf', 'games')" />
+                        <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF Series" @click="exportCalendar('pdf', 'series')" />
+                        <v-divider class="my-1" />
+                        <v-list-item prepend-icon="mdi-microsoft-excel" title="XLS Partidos" @click="exportCalendar('xlsx', 'games')" />
+                        <v-list-item prepend-icon="mdi-microsoft-excel" title="XLS Series" @click="exportCalendar('xlsx', 'series')" />
+                        <v-divider class="my-1" />
+                        <v-list-item prepend-icon="mdi-delete-outline" title="Eliminar" base-color="error" @click="confirmAction = 'clear'" />
+                      </v-list>
+                    </v-menu>
+                  </v-col>
+                </v-row>
+
+                <v-row v-else dense align="center">
                   <v-col cols="12" sm="6" md="3">
                     <v-text-field v-model="options.start_date" type="date" label="Fecha de inicio" variant="outlined" density="compact" hide-details />
                   </v-col>
@@ -127,13 +162,37 @@
                     <v-select v-model="options.rounds" :items="[1, 2, 3, 4]" label="Vueltas" variant="outlined" density="compact" hide-details />
                   </v-col>
                   <v-col cols="6" sm="3" md="2">
-                    <v-select v-model="options.games_per_series" :items="[1, 2, 3, 4, 5, 6, 7]" label="Juegos por serie" variant="outlined" density="compact" hide-details />
+                    <v-select v-model="options.games_per_series" :items="[1, 2, 3]" label="Juegos por serie" variant="outlined" density="compact" hide-details />
                   </v-col>
                   <v-col cols="6" sm="3" md="2">
                     <v-select v-model="options.rest_days" :items="[0, 1, 2, 3, 4, 5, 6, 7]" label="Descanso entre series (días)" variant="outlined" density="compact" hide-details />
                   </v-col>
                   <v-col cols="12" md="3" class="d-flex ga-2 justify-md-end">
                     <v-btn
+                      v-if="previewData"
+                      color="grey-darken-1"
+                      size="small"
+                      variant="outlined"
+                      class="text-none font-weight-bold rounded-pill"
+                      :disabled="gamesStore.loading"
+                      @click="previewData = null"
+                    >
+                      Descartar
+                    </v-btn>
+                    <v-btn
+                      v-if="previewData"
+                      color="success"
+                      size="small"
+                      variant="flat"
+                      class="text-none font-weight-bold rounded-pill px-4"
+                      prepend-icon="mdi-content-save"
+                      :loading="gamesStore.loading"
+                      @click="saveCalendar"
+                    >
+                      Guardar calendario
+                    </v-btn>
+                    <v-btn
+                      v-else
                       color="black"
                       size="small"
                       variant="flat"
@@ -141,19 +200,9 @@
                       prepend-icon="mdi-calendar-sync"
                       :loading="gamesStore.loading"
                       :disabled="teamsStore.teams.length < 2"
-                      @click="hasCalendar ? (confirmAction = 'regenerate') : generateCalendar()"
+                      @click="previewCalendar"
                     >
-                      {{ hasCalendar ? 'Regenerar' : 'Generar calendario' }}
-                    </v-btn>
-                    <v-btn
-                      v-if="hasCalendar"
-                      color="error"
-                      size="small"
-                      variant="outlined"
-                      class="text-none font-weight-bold rounded-pill"
-                      @click="confirmAction = 'clear'"
-                    >
-                      Eliminar
+                      Generar calendario
                     </v-btn>
                   </v-col>
                 </v-row>
@@ -168,9 +217,22 @@
               </div>
             </div>
 
+            <v-alert
+              v-if="previewData"
+              type="warning"
+              variant="tonal"
+              density="compact"
+              class="mb-3 text-body-2"
+            >
+              Vista previa con {{ options.games_per_series }} {{ options.games_per_series === 1 ? 'juego' : 'juegos' }} por serie. El calendario aún no se guarda: presiona <strong>Guardar calendario</strong> para confirmarlo.
+            </v-alert>
+
             <TournamentSchedule
-              :games="gamesStore.games"
-              :byes="gamesStore.byes"
+              :games="previewData ? previewData.games : gamesStore.games"
+              :byes="previewData ? previewData.byes : gamesStore.byes"
+              :show-actions="!previewData"
+              @edit="editGame"
+              @boxscore="openBoxscore"
               :loading="gamesStore.loading"
               default-view="series"
             />
@@ -180,28 +242,51 @@
     </v-main>
 
     <!-- Agregar equipos -->
-    <v-dialog v-model="showAddDialog" max-width="520px">
+    <v-dialog v-model="showAddDialog" max-width="720px">
       <v-card class="rounded-xl pa-2" theme="light">
         <v-card-title class="text-h6 font-weight-black text-grey-darken-4 pt-4 px-4">
           Agregar equipos
         </v-card-title>
         <v-card-text>
-          <v-autocomplete
-            v-model="selectedTeamIds"
-            :items="availableTeams"
-            item-title="name"
-            item-value="id"
-            label="Equipos"
+          <v-text-field
+            v-model="teamSearch"
+            prepend-inner-icon="mdi-magnify"
+            placeholder="Buscar equipo..."
             variant="outlined"
             density="compact"
-            multiple
-            chips
-            closable-chips
-            :loading="allTeamsStore.loading"
-            no-data-text="No hay más equipos disponibles"
+            hide-details
+            clearable
+            class="mb-3"
           />
+          <v-card variant="outlined" color="grey-lighten-2" class="rounded-lg bg-white overflow-hidden">
+            <v-data-table
+              v-model="selectedTeamIds"
+              :headers="availableTeamHeaders"
+              :items="availableTeams"
+              :search="teamSearch"
+              :loading="allTeamsStore.loading"
+              :items-per-page="10"
+              item-value="id"
+              show-select
+              class="admin-data-table bg-white"
+              density="compact"
+              no-data-text="No hay más equipos disponibles"
+            >
+              <template v-slot:item.name="{ item }">
+                <div class="d-flex align-center py-1">
+                  <v-avatar color="blue-darken-3" size="24" class="mr-2 text-white team-abbr font-weight-bold">
+                    {{ item.abbreviation || 'EQ' }}
+                  </v-avatar>
+                  <span class="font-weight-bold text-black">{{ item.name }}</span>
+                </div>
+              </template>
+            </v-data-table>
+          </v-card>
         </v-card-text>
         <v-card-actions class="pa-4 pt-0 justify-end ga-2">
+          <span class="text-body-2 text-grey-darken-1 mr-auto">
+            {{ selectedTeamIds.length }} {{ selectedTeamIds.length === 1 ? 'equipo seleccionado' : 'equipos seleccionados' }}
+          </span>
           <v-btn variant="outlined" color="grey-darken-1" class="text-capitalize rounded-pill px-5" @click="showAddDialog = false">
             Cancelar
           </v-btn>
@@ -242,7 +327,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useTournamentsStore } from '@/stores/tournaments'
 import { useTournamentTeamsStore } from '@/stores/tournamentTeams'
 import { useGamesStore } from '@/stores/games'
@@ -269,6 +354,13 @@ const hasCalendar = computed(() => gamesStore.games.length > 0)
 // ---------- EQUIPOS ----------
 const showAddDialog = ref(false)
 const selectedTeamIds = ref([])
+const teamSearch = ref('')
+
+const availableTeamHeaders = [
+  { title: 'Equipo', key: 'name' },
+  { title: 'Nombre Corto', key: 'short_name' },
+  { title: 'Abreviación', key: 'abbreviation' }
+]
 
 // Solo equipos activos del mismo propietario que el torneo y que aún no participan
 const availableTeams = computed(() => {
@@ -280,6 +372,7 @@ const availableTeams = computed(() => {
 
 const openAddDialog = () => {
   selectedTeamIds.value = []
+  teamSearch.value = ''
   showAddDialog.value = true
   if (allTeamsStore.teams.length === 0) allTeamsStore.fetchTeams()
 }
@@ -308,6 +401,19 @@ const options = ref({
   rest_days: 1
 })
 
+// Calendario calculado pero aún sin guardar
+const previewData = ref(null)
+
+// Al cambiar los juegos por serie se calcula la vista previa; con otros parámetros
+// se recalcula solo si ya había una. Se activa hasta cargar los datos del torneo.
+const watchOptions = () => watch(
+  () => ({ ...options.value }),
+  (current, previous) => {
+    if (teamsStore.teams.length < 2) return
+    if (current.games_per_series !== previous.games_per_series || previewData.value) previewCalendar()
+  }
+)
+
 // Toma los parámetros con los que se generó el calendario actual
 const syncOptionsFromGames = () => {
   const games = gamesStore.games
@@ -318,7 +424,8 @@ const syncOptionsFromGames = () => {
   options.value = {
     start_date: games[0].scheduled_date,
     rounds: Math.max(...games.map(game => game.round)),
-    games_per_series: gamesPerSeries,
+    // El combo arranca con el valor del registro del torneo
+    games_per_series: tournament.value?.games_per_series ?? gamesPerSeries,
     rest_days: Math.max(0, daysBetween - gamesPerSeries)
   }
 }
@@ -335,13 +442,58 @@ const preview = computed(() => {
   }
 })
 
-const generateCalendar = async () => {
+const previewCalendar = async () => {
   try {
-    await gamesStore.generate(props.id, options.value)
-    notify.success('Calendario generado correctamente')
+    previewData.value = await gamesStore.preview(props.id, options.value)
   } catch (error) {
     notify.error(getErrorMessage(error, 'Ocurrió un error al generar el calendario'))
   }
+}
+
+// Guarda el calendario y deja en el torneo los juegos por serie elegidos
+const saveCalendar = async () => {
+  try {
+    await gamesStore.generate(props.id, options.value)
+    tournament.value = { ...tournament.value, games_per_series: options.value.games_per_series }
+    previewData.value = null
+    notify.success('Calendario guardado correctamente')
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al guardar el calendario'))
+  }
+}
+
+// Parámetros con que se guardó el calendario, como etiquetas
+const savedParams = computed(() => [
+  { label: 'Fecha de inicio', value: formatDate(options.value.start_date) },
+  { label: 'Vueltas', value: options.value.rounds },
+  { label: 'Juegos por serie', value: options.value.games_per_series },
+  { label: 'Descanso entre series', value: `${options.value.rest_days} ${options.value.rest_days === 1 ? 'día' : 'días'}` }
+])
+
+const isExporting = ref(false)
+
+// format: 'pdf' o 'xlsx'; view: 'games' (partidos) o 'series'
+const exportCalendar = async (format, view) => {
+  isExporting.value = true
+  try {
+    const name = (tournament.value?.name || 'torneo').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/gi, '_').toLowerCase()
+    const prefix = view === 'series' ? 'calendario_series' : 'calendario_partidos'
+    await gamesStore.exportCalendar(props.id, format, view, `${prefix}_${name}.${format}`)
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al generar el archivo'))
+  } finally {
+    isExporting.value = false
+  }
+}
+
+// ---------- ACCIONES DE PARTIDOS ----------
+// item: un partido (vista Partidos) o una serie con sus partidos (vista Series)
+const editGame = (item) => {
+  notify.warning(`Editar ${item.away_team?.name ?? item.away.name} @ ${item.home_team?.name ?? item.home.name}: próximamente`)
+}
+
+const openBoxscore = (item) => {
+  notify.warning(`Boxscore de ${item.away_team?.name ?? item.away.name} @ ${item.home_team?.name ?? item.home.name}: próximamente`)
 }
 
 // ---------- CONFIRMACIONES ----------
@@ -353,11 +505,6 @@ const confirmTexts = computed(() => ({
     title: 'Retirar equipo',
     message: `¿Seguro que deseas retirar a ${teamToRemove.value?.name || 'este equipo'} del torneo?`,
     button: 'Retirar'
-  },
-  regenerate: {
-    title: 'Regenerar calendario',
-    message: 'Se reemplazará el calendario actual por uno nuevo con los parámetros indicados.',
-    button: 'Regenerar'
   },
   clear: {
     title: 'Eliminar calendario',
@@ -372,9 +519,6 @@ const runConfirmAction = async () => {
     if (confirmAction.value === 'remove') {
       await teamsStore.removeTeam(props.id, teamToRemove.value.id)
       notify.success('Equipo retirado del torneo')
-    } else if (confirmAction.value === 'regenerate') {
-      await gamesStore.generate(props.id, options.value)
-      notify.success('Calendario generado correctamente')
     } else if (confirmAction.value === 'clear') {
       await gamesStore.clear(props.id)
       notify.success('Calendario eliminado correctamente')
@@ -395,6 +539,7 @@ onMounted(async () => {
 
   try {
     tournament.value = await tournamentsStore.fetchTournament(props.id)
+    options.value.games_per_series = tournament.value.games_per_series ?? 3
   } catch (error) {
     notify.error(getErrorMessage(error, 'No se encontró el torneo'))
     return
@@ -402,6 +547,7 @@ onMounted(async () => {
 
   await Promise.all([teamsStore.fetchTeams(props.id), gamesStore.fetchGames(props.id)])
   syncOptionsFromGames()
+  watchOptions()
 })
 </script>
 
@@ -473,6 +619,38 @@ onMounted(async () => {
 
 .team-abbr {
   font-size: 0.55rem !important;
+}
+
+/* Mismo estilo que las tablas de catálogos del panel */
+.admin-data-table {
+  font-size: 0.8125rem;
+}
+
+.admin-data-table :deep(.v-data-table__tr) {
+  background-color: #ffffff !important;
+  color: #212121 !important;
+}
+
+.admin-data-table :deep(tbody .v-data-table__tr:nth-child(even)) {
+  background-color: #f4f7fb !important;
+}
+
+.admin-data-table :deep(th) {
+  background-color: #f8fafc !important;
+  font-size: 0.8125rem !important;
+  font-weight: 700 !important;
+  color: #475569 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+  height: 34px !important;
+}
+
+.admin-data-table :deep(td) {
+  border-bottom: 1px solid #f1f5f9 !important;
+  height: 30px !important;
+}
+
+.admin-data-table :deep(.v-data-table-footer) {
+  font-size: 0.8125rem;
 }
 
 @media (max-width: 600px) {

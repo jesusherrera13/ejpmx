@@ -32,6 +32,20 @@
                 />
               </v-col>
 
+              <!-- Games per series -->
+              <v-col cols="12">
+                <v-select
+                  v-model="formData.games_per_series"
+                  :items="[1, 2, 3]"
+                  label="Juegos por serie"
+                  variant="outlined"
+                  density="comfortable"
+                  class="rounded-lg"
+                  hint="Se aplica al generar el calendario del torneo"
+                  persistent-hint
+                />
+              </v-col>
+
               <!-- Is Active -->
               <v-col cols="12">
                 <v-switch
@@ -91,6 +105,7 @@ const isFormValid = ref(false)
 const defaultForm = {
   id: null,
   name: '',
+  games_per_series: 3,
   is_active: true
 }
 
@@ -110,6 +125,7 @@ watch(
       formData.value = {
         id: newTournament.id ?? null,
         name: newTournament.name ?? '',
+        games_per_series: newTournament.games_per_series ?? 3,
         is_active: newTournament.is_active ?? true
       }
     } else {

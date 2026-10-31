@@ -28,6 +28,7 @@ class TournamentController extends Controller
     {
         $validated = $request->validate($this->rules());
         $validated['is_active'] = $request->boolean('is_active', true);
+        $validated['games_per_series'] ??= 3;
         $validated['user_id'] = $request->user()->id;
 
         $tournament = Tournament::create($validated);
@@ -128,6 +129,7 @@ class TournamentController extends Controller
 
         return [
             'name' => [...explode('|', $required), 'string', 'max:150', Rule::unique('tournaments', 'name')->where('user_id', $tournament?->user_id ?? auth()->id())->whereNull('deleted_at')->ignore($tournament?->id)],
+            'games_per_series' => ['integer', Rule::in(Tournament::GAMES_PER_SERIES_OPTIONS)],
             'is_active' => 'boolean',
         ];
     }
