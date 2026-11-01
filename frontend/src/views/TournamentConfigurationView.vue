@@ -97,16 +97,26 @@
                   </v-avatar>
                   <span class="gh-row__name font-weight-bold text-black">{{ team.name }}</span>
                   <span class="gh-row__meta text-grey-darken-1">{{ team.short_name }}</span>
+                  <v-chip size="x-small" variant="tonal" :color="team.roster_count ? 'primary' : undefined" class="mr-2" title="Jugadores en el roster">
+                    <v-icon icon="mdi-account-group" size="12" class="mr-1" />{{ team.roster_count || 0 }}
+                  </v-chip>
                   <span class="gh-row__date text-grey-darken-1">Inscrito {{ formatDate(team.pivot?.created_at) }}</span>
-                  <v-btn
-                    icon="mdi-close"
-                    size="x-small"
-                    variant="text"
-                    color="grey-darken-1"
-                    :disabled="hasCalendar"
-                    title="Retirar del torneo"
-                    @click="askRemoveTeam(team)"
-                  />
+                  <v-menu location="bottom end">
+                    <template v-slot:activator="{ props: menuProps }">
+                      <v-btn v-bind="menuProps" icon="mdi-dots-vertical" size="x-small" variant="text" color="grey-darken-1" title="Acciones" />
+                    </template>
+                    <v-list density="compact" min-width="190" class="rounded-lg">
+                      <v-list-item prepend-icon="mdi-cog-outline" title="Configuración" subtitle="Roster de la temporada" @click="openRoster(team)" />
+                      <v-divider class="my-1" />
+                      <v-list-item
+                        prepend-icon="mdi-close"
+                        title="Retirar del torneo"
+                        base-color="error"
+                        :disabled="hasCalendar"
+                        @click="askRemoveTeam(team)"
+                      />
+                    </v-list>
+                  </v-menu>
                 </div>
               </template>
             </div>
@@ -304,6 +314,9 @@
       </v-card>
     </v-dialog>
 
+    <!-- Roster del equipo -->
+    <TeamRosterModal v-model="showRosterModal" :tournament-id="id" :team="rosterTeam" />
+
     <!-- Editar partido -->
     <GameFormModal
       v-model="showGameModal"
@@ -355,6 +368,7 @@ import { getErrorMessage } from '@/utils/errors'
 import { formatDate, parseDate, toIsoDate } from '@/utils/dates'
 import TournamentSchedule from '@/components/TournamentSchedule.vue'
 import GameFormModal from '@/components/GameFormModal.vue'
+import TeamRosterModal from '@/components/TeamRosterModal.vue'
 import BoxscoreModal from '@/components/BoxscoreModal.vue'
 
 const props = defineProps({
@@ -411,6 +425,14 @@ const teamToRemove = ref(null)
 const askRemoveTeam = (team) => {
   teamToRemove.value = team
   confirmAction.value = 'remove'
+}
+
+// Roster del equipo en este torneo
+const rosterTeam = ref(null)
+const showRosterModal = ref(false)
+const openRoster = (team) => {
+  rosterTeam.value = team
+  showRosterModal.value = true
 }
 
 // ---------- CALENDARIO ----------

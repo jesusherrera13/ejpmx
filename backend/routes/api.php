@@ -10,6 +10,7 @@ use App\Http\Controllers\ContentTypeController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\TournamentController;
+use App\Http\Controllers\TournamentRosterController;
 use App\Http\Controllers\TournamentTeamController;
 use App\Http\Controllers\BoxscoreController;
 use App\Http\Controllers\GameController;
@@ -50,6 +51,9 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
     Route::get('/tournaments/{tournament}/teams', [TournamentTeamController::class, 'index']);
     Route::post('/tournaments/{tournament}/teams', [TournamentTeamController::class, 'store']);
     Route::delete('/tournaments/{tournament}/teams/{team}', [TournamentTeamController::class, 'destroy']);
+    Route::get('/tournaments/{tournament}/teams/{team}/players', [TournamentRosterController::class, 'index']);
+    Route::post('/tournaments/{tournament}/teams/{team}/players', [TournamentRosterController::class, 'store']);
+    Route::delete('/tournaments/{tournament}/teams/{team}/players/{player}', [TournamentRosterController::class, 'destroy'])->whereNumber('player');
 
     // GAME
     Route::get('/tournaments/{tournament}/games', [GameController::class, 'index']);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Team;
 use App\Models\Tournament;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -16,7 +17,7 @@ class TournamentTeamController extends Controller
     {
         $this->ensureOwner($tournament);
 
-        return response()->json($tournament->teams()->get());
+        return response()->json($this->withRosterCount($tournament));
     }
 
     /**
@@ -41,7 +42,7 @@ class TournamentTeamController extends Controller
 
         $tournament->teams()->syncWithoutDetaching($validated['team_ids']);
 
-        return response()->json($tournament->teams()->get(), 201);
+        return response()->json($this->withRosterCount($tournament), 201);
     }
 
     public function destroy(Tournament $tournament, Team $team)
@@ -54,6 +55,18 @@ class TournamentTeamController extends Controller
         return response()->json([
             'message' => 'Equipo retirado del torneo'
         ], 200);
+    }
+
+    // Equipos inscritos con cuántos jugadores tiene su roster
+    private function withRosterCount(Tournament $tournament)
+    {
+        $counts = DB::table('tournament_roster_players')
+            ->join('tournament_team', 'tournament_team.id', '=', 'tournament_roster_players.tournament_team_id')
+            ->where('tournament_roster_players.tournament_id', $tournament->id)
+            ->groupBy('tournament_team.team_id')
+            ->pluck(DB::raw('count(*)'), 'tournament_team.team_id');
+
+        return $tournament->teams()->get()->each(fn ($team) => $team->setAttribute('roster_count', (int) ($counts[$team->id] ?? 0)));
     }
 
     // Cambiar los equipos dejaría el calendario inconsistente

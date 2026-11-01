@@ -28,6 +28,8 @@ class Game extends Model
         'home_errors',
         'away_hits',
         'away_errors',
+        'home_lob',
+        'away_lob',
         'line_score',
     ];
 

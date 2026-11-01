@@ -39,6 +39,29 @@ export const useTournamentTeamsStore = defineStore('tournamentTeams', {
       }
     },
 
+    // Roster del equipo en el torneo: { roster, available }
+    async fetchRoster(tournamentId, teamId) {
+      const response = await axiosClient.get(`/tournaments/${tournamentId}/teams/${teamId}/players`)
+      return response.data
+    },
+
+    async addRosterPlayers(tournamentId, teamId, playerIds) {
+      const response = await axiosClient.post(`/tournaments/${tournamentId}/teams/${teamId}/players`, { player_ids: playerIds })
+      this.setRosterCount(teamId, response.data.roster.length)
+      return response.data
+    },
+
+    async removeRosterPlayer(tournamentId, teamId, playerId) {
+      const response = await axiosClient.delete(`/tournaments/${tournamentId}/teams/${teamId}/players/${playerId}`)
+      this.setRosterCount(teamId, response.data.roster.length)
+      return response.data
+    },
+
+    setRosterCount(teamId, count) {
+      const team = this.teams.find(item => item.id === teamId)
+      if (team) team.roster_count = count
+    },
+
     async removeTeam(tournamentId, teamId) {
       this.loading = true
       try {
