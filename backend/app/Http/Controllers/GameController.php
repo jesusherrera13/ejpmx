@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Game;
 use App\Models\Tournament;
 use App\Support\RoundRobinScheduler;
 use Carbon\CarbonImmutable;
@@ -66,14 +67,15 @@ class GameController extends Controller
                 $byes[$series->matchday]->name ?? null,
             ]);
         } else {
-            $columns = ['Jornada' => 10, 'Vuelta' => 9, 'Serie' => 8, 'Juego' => 8, 'Fecha' => 13, 'Visitante' => 30, 'Local' => 30, 'Carreras visitante' => 18, 'Carreras local' => 15, 'Descansa' => 30];
+            $columns = ['Jornada' => 10, 'Vuelta' => 9, 'Serie' => 8, 'Juego' => 8, 'Fecha' => 13, 'Hora' => 8, 'Visitante' => 30, 'Local' => 30, 'Carreras visitante' => 18, 'Carreras local' => 15, 'Descansa' => 30];
             $dateColumns = ['E'];
             $rows = $this->sortedForExport($games)->map(fn ($game) => [
                 $game->matchday,
                 $game->round,
                 $game->series,
                 $game->series_game,
-                ExcelDate::PHPToExcel($game->scheduled_date),
+                ExcelDate::PHPToExcel($game->scheduled_at->copy()->startOfDay()),
+                $game->scheduledTime(),
                 $game->awayTeam->name,
                 $game->homeTeam->name,
                 $game->away_score,
@@ -175,7 +177,7 @@ class GameController extends Controller
     {
         return $games->sortBy([
             ['matchday', 'asc'],
-            fn ($a, $b) => $a->scheduled_date <=> $b->scheduled_date,
+            fn ($a, $b) => $a->scheduled_at <=> $b->scheduled_at,
             ['game_number', 'asc'],
         ])->values();
     }
@@ -189,8 +191,8 @@ class GameController extends Controller
             'round' => $seriesGames->first()->round,
             'away' => $seriesGames->first()->awayTeam,
             'home' => $seriesGames->first()->homeTeam,
-            'start' => $seriesGames->min('scheduled_date'),
-            'end' => $seriesGames->max('scheduled_date'),
+            'start' => $seriesGames->min('scheduled_at'),
+            'end' => $seriesGames->max('scheduled_at'),
             'games' => $seriesGames->count(),
         ])->values();
     }
@@ -259,6 +261,38 @@ class GameController extends Controller
         });
 
         return $this->index($tournament);
+    }
+
+    /**
+     * Cambia los equipos que se enfrentan y la fecha y hora de un partido.
+     */
+    public function update(Request $request, Tournament $tournament, Game $game)
+    {
+        $this->ensureOwner($tournament);
+        abort_unless($game->tournament_id === $tournament->id, 404);
+
+        $teamIds = $tournament->teams()->pluck('teams.id')->all();
+
+        $validated = $request->validate([
+            'away_team_id' => ['required', 'integer', Rule::in($teamIds)],
+            'home_team_id' => ['required', 'integer', Rule::in($teamIds), 'different:away_team_id'],
+            'scheduled_at' => 'required|date_format:Y-m-d H:i',
+        ], [
+            'home_team_id.different' => 'El equipo local debe ser distinto al visitante.',
+            '*.in' => 'El equipo seleccionado no está inscrito en el torneo.',
+        ], [
+            'away_team_id' => 'visitante',
+            'home_team_id' => 'local',
+            'scheduled_at' => 'fecha y hora',
+        ]);
+
+        DB::transaction(function () use ($game, $validated) {
+            $game->update($validated);
+            // Si cambió algún equipo, el bateo capturado del equipo que salió ya no aplica
+            $game->battingLines()->whereNotIn('team_id', [$game->home_team_id, $game->away_team_id])->delete();
+        });
+
+        return response()->json($game->load(['homeTeam:' . self::TEAM_COLUMNS, 'awayTeam:' . self::TEAM_COLUMNS]));
     }
 
     /**

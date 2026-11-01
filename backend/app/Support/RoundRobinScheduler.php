@@ -64,7 +64,7 @@ class RoundRobinScheduler
                             'game_number' => ++$gameNumber,
                             'home_team_id' => $home,
                             'away_team_id' => $away,
-                            'scheduled_date' => $firstDay->addDays($game - 1)->toDateString(),
+                            'scheduled_at' => $firstDay->addDays($game - 1)->toDateTimeString(),
                         ];
                     }
                 }

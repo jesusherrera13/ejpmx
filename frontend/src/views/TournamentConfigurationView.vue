@@ -304,6 +304,24 @@
       </v-card>
     </v-dialog>
 
+    <!-- Editar partido -->
+    <GameFormModal
+      v-model="showGameModal"
+      :game="gameToEdit"
+      :teams="teamsStore.teams"
+      :loading="isSavingGame"
+      @save="saveGame"
+    />
+
+    <!-- Box score -->
+    <BoxscoreModal
+      v-model="showBoxscoreModal"
+      :boxscore="boxscoreData"
+      :loading="isLoadingBoxscore"
+      :saving="isSavingBoxscore"
+      @save="saveBoxscore"
+    />
+
     <!-- Confirmaciones -->
     <v-dialog :model-value="!!confirmAction" max-width="420px" persistent>
       <v-card class="rounded-xl pa-2" theme="light">
@@ -336,6 +354,8 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { getErrorMessage } from '@/utils/errors'
 import { formatDate, parseDate, toIsoDate } from '@/utils/dates'
 import TournamentSchedule from '@/components/TournamentSchedule.vue'
+import GameFormModal from '@/components/GameFormModal.vue'
+import BoxscoreModal from '@/components/BoxscoreModal.vue'
 
 const props = defineProps({
   id: { type: [String, Number], required: true }
@@ -420,9 +440,9 @@ const syncOptionsFromGames = () => {
   if (games.length === 0) return
   const gamesPerSeries = Math.max(...games.map(game => game.series_game))
   const secondMatchday = games.find(game => game.matchday === 2)
-  const daysBetween = secondMatchday ? Math.round((parseDate(secondMatchday.scheduled_date) - parseDate(games[0].scheduled_date)) / 86400000) : gamesPerSeries
+  const daysBetween = secondMatchday ? Math.round((parseDate(secondMatchday.scheduled_at) - parseDate(games[0].scheduled_at)) / 86400000) : gamesPerSeries
   options.value = {
-    start_date: games[0].scheduled_date,
+    start_date: games[0].scheduled_at.substring(0, 10),
     rounds: Math.max(...games.map(game => game.round)),
     // El combo arranca con el valor del registro del torneo
     games_per_series: tournament.value?.games_per_series ?? gamesPerSeries,
@@ -488,12 +508,70 @@ const exportCalendar = async (format, view) => {
 
 // ---------- ACCIONES DE PARTIDOS ----------
 // item: un partido (vista Partidos) o una serie con sus partidos (vista Series)
+const gameToEdit = ref(null)
+const showGameModal = ref(false)
+const isSavingGame = ref(false)
+
 const editGame = (item) => {
-  notify.warning(`Editar ${item.away_team?.name ?? item.away.name} @ ${item.home_team?.name ?? item.home.name}: próximamente`)
+  // Una serie agrupa varios partidos: se editan uno por uno
+  if (item.games) {
+    notify.warning('Para editar un partido cambia a la vista Partidos')
+    return
+  }
+  gameToEdit.value = item
+  showGameModal.value = true
 }
 
-const openBoxscore = (item) => {
-  notify.warning(`Boxscore de ${item.away_team?.name ?? item.away.name} @ ${item.home_team?.name ?? item.home.name}: próximamente`)
+const saveGame = async (data) => {
+  isSavingGame.value = true
+  try {
+    await gamesStore.updateGame(props.id, gameToEdit.value.id, data)
+    notify.success('Partido actualizado correctamente')
+    showGameModal.value = false
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al actualizar el partido'))
+  } finally {
+    isSavingGame.value = false
+  }
+}
+
+const showBoxscoreModal = ref(false)
+const boxscoreData = ref(null)
+const boxscoreGameId = ref(null)
+const isLoadingBoxscore = ref(false)
+const isSavingBoxscore = ref(false)
+
+const openBoxscore = async (item) => {
+  // Una serie agrupa varios partidos: el box score es de cada partido
+  if (item.games) {
+    notify.warning('Para capturar el box score cambia a la vista Partidos')
+    return
+  }
+  boxscoreGameId.value = item.id
+  boxscoreData.value = null
+  showBoxscoreModal.value = true
+  isLoadingBoxscore.value = true
+  try {
+    boxscoreData.value = await gamesStore.fetchBoxscore(props.id, item.id)
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al cargar el box score'))
+    showBoxscoreModal.value = false
+  } finally {
+    isLoadingBoxscore.value = false
+  }
+}
+
+const saveBoxscore = async (data) => {
+  isSavingBoxscore.value = true
+  try {
+    await gamesStore.saveBoxscore(props.id, boxscoreGameId.value, data)
+    notify.success('Box score guardado correctamente')
+    showBoxscoreModal.value = false
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al guardar el box score'))
+  } finally {
+    isSavingBoxscore.value = false
+  }
 }
 
 // ---------- CONFIRMACIONES ----------

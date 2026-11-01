@@ -14,8 +14,8 @@
     <div class="d-flex flex-wrap align-center ga-3 mb-3">
       <div class="text-body-2 text-grey-darken-3 mr-auto">
         {{ games.length }} partidos en {{ matchdays.length }} jornadas,
-        del {{ formatDate(games[0].scheduled_date) }}
-        al {{ formatDate(games[games.length - 1].scheduled_date) }}.
+        del {{ formatDate(games[0].scheduled_at) }}
+        al {{ formatDate(games[games.length - 1].scheduled_at) }}.
       </div>
       <v-btn-toggle v-model="view" mandatory density="compact" variant="outlined" divided color="primary" class="bg-white">
         <v-btn value="games" size="small" class="text-none">Partidos</v-btn>
@@ -95,7 +95,10 @@
           <template v-else>
             <tr v-for="game in matchday.games" :key="game.game_number">
               <td class="text-grey-darken-1">{{ game.game_number }}</td>
-              <td class="text-grey-darken-2 text-no-wrap">{{ formatDate(game.scheduled_date) }}</td>
+              <td class="text-grey-darken-2 text-no-wrap">
+                {{ formatDate(game.scheduled_at) }}
+                <span v-if="formatTime(game.scheduled_at)" class="text-grey-darken-1 ml-1">{{ formatTime(game.scheduled_at) }}</span>
+              </td>
               <td class="text-right font-weight-bold text-black">{{ game.away_team.name }}</td>
               <td class="text-center text-grey">@</td>
               <td class="font-weight-bold text-black">{{ game.home_team.name }}</td>
@@ -125,7 +128,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { formatDate, formatRange } from '@/utils/dates'
+import { formatDate, formatRange, formatTime } from '@/utils/dates'
 
 const props = defineProps({
   games: { type: Array, default: () => [] },
@@ -174,15 +177,15 @@ const matchdays = computed(() => {
       result.set(game.matchday, {
         number: game.matchday,
         round: game.round,
-        start: game.scheduled_date,
-        end: game.scheduled_date,
+        start: game.scheduled_at,
+        end: game.scheduled_at,
         bye: props.byes[game.matchday] || null,
         games: [],
         series: new Map()
       })
     }
     const matchday = result.get(game.matchday)
-    if (game.scheduled_date > matchday.end) matchday.end = game.scheduled_date
+    if (game.scheduled_at > matchday.end) matchday.end = game.scheduled_at
     matchday.games.push(game)
 
     if (!matchday.series.has(game.series)) {
@@ -190,20 +193,20 @@ const matchdays = computed(() => {
         number: game.series,
         home: game.home_team,
         away: game.away_team,
-        start: game.scheduled_date,
-        end: game.scheduled_date,
+        start: game.scheduled_at,
+        end: game.scheduled_at,
         games: []
       })
     }
     const series = matchday.series.get(game.series)
-    if (game.scheduled_date > series.end) series.end = game.scheduled_date
+    if (game.scheduled_at > series.end) series.end = game.scheduled_at
     series.games.push(game)
   }
 
   // En la vista de partidos se ordenan por fecha dentro de la jornada
   return [...result.values()].map(matchday => ({
     ...matchday,
-    games: matchday.games.sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date) || a.game_number - b.game_number),
+    games: matchday.games.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at) || a.game_number - b.game_number),
     series: [...matchday.series.values()]
   }))
 })

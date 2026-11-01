@@ -32,6 +32,31 @@ export const useGamesStore = defineStore('games', {
       }
     },
 
+    // data: { away_team_id, home_team_id, scheduled_at: 'YYYY-MM-DD HH:mm' }
+    async updateGame(tournamentId, gameId, data) {
+      const response = await axiosClient.put(`/tournaments/${tournamentId}/games/${gameId}`, data)
+      // Se recarga sin vaciar la tabla: al cambiar equipos puede cambiar quién descansa
+      const schedule = await axiosClient.get(`/tournaments/${tournamentId}/games`)
+      this.games = schedule.data.games
+      this.byes = schedule.data.byes
+      return response.data
+    },
+
+    // { game (con batting_lines), players, positions }
+    async fetchBoxscore(tournamentId, gameId) {
+      const response = await axiosClient.get(`/tournaments/${tournamentId}/games/${gameId}/boxscore`)
+      return response.data
+    },
+
+    // Guarda el box score y recarga el calendario para reflejar el marcador
+    async saveBoxscore(tournamentId, gameId, data) {
+      const response = await axiosClient.put(`/tournaments/${tournamentId}/games/${gameId}/boxscore`, data)
+      const schedule = await axiosClient.get(`/tournaments/${tournamentId}/games`)
+      this.games = schedule.data.games
+      this.byes = schedule.data.byes
+      return response.data
+    },
+
     // format: 'xlsx' o 'pdf'; view: 'games' (partidos) o 'series'
     async exportCalendar(tournamentId, format, view, filename) {
       await downloadFile(`/tournaments/${tournamentId}/games/export/${format}?view=${view}`, filename)

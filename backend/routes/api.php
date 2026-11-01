@@ -11,6 +11,7 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\TournamentController;
 use App\Http\Controllers\TournamentTeamController;
+use App\Http\Controllers\BoxscoreController;
 use App\Http\Controllers\GameController;
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -56,6 +57,9 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
     Route::get('/tournaments/{tournament}/games/export/pdf', [GameController::class, 'exportPdf']);
     Route::post('/tournaments/{tournament}/games/preview', [GameController::class, 'preview']);
     Route::post('/tournaments/{tournament}/games/generate', [GameController::class, 'generate']);
+    Route::put('/tournaments/{tournament}/games/{game}', [GameController::class, 'update']);
+    Route::get('/tournaments/{tournament}/games/{game}/boxscore', [BoxscoreController::class, 'show']);
+    Route::put('/tournaments/{tournament}/games/{game}/boxscore', [BoxscoreController::class, 'update']);
     Route::delete('/tournaments/{tournament}/games', [GameController::class, 'destroy']);
 
      // CONTENT TYPE

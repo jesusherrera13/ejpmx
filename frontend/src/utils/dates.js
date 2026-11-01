@@ -15,8 +15,15 @@ export function formatDate(value) {
   return date ? dateFormatter.format(date) : ''
 }
 
+// Compara solo el día: 'YYYY-MM-DD HH:mm:ss' del mismo día es un solo día
 export function formatRange(start, end) {
-  return start === end ? formatDate(start) : `${formatDate(start)} – ${formatDate(end)}`
+  return String(start).substring(0, 10) === String(end).substring(0, 10) ? formatDate(start) : `${formatDate(start)} – ${formatDate(end)}`
+}
+
+// '2026-10-31 19:30:00' -> '19:30'; vacío si no tiene hora asignada (00:00)
+export function formatTime(value) {
+  const time = String(value || '').substring(11, 16)
+  return time && time !== '00:00' ? time : ''
 }
 
 export function toIsoDate(date) {

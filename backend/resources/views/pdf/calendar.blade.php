@@ -22,7 +22,7 @@
 <body>
     @php
         $fmt = fn ($date) => $date->locale('es')->isoFormat('ddd DD [de] MMM');
-        $range = fn ($start, $end) => $fmt($start) . ($end->ne($start) ? ' – ' . $fmt($end) : '');
+        $range = fn ($start, $end) => $fmt($start) . ($end->isSameDay($start) ? '' : ' – ' . $fmt($end));
         $isSeries = $view === 'series';
     @endphp
 
@@ -39,7 +39,7 @@
                 <tr class="group">
                     <td colspan="{{ $isSeries ? 6 : 7 }}">
                         <strong>Jornada {{ $matchday }}</strong>
-                        <span class="muted"> · Vuelta {{ $games->first()->round }} · {{ $range($games->first()->scheduled_date, $games->last()->scheduled_date) }}</span>
+                        <span class="muted"> · Vuelta {{ $games->first()->round }} · {{ $range($games->first()->scheduled_at, $games->last()->scheduled_at) }}</span>
                         @isset($byes[$matchday])
                             <span class="muted"> · Descansa <strong>{{ $byes[$matchday]->name }}</strong></span>
                         @endisset
@@ -82,7 +82,7 @@
                     @foreach ($games as $game)
                         <tr>
                             <td class="muted">{{ $game->game_number }}</td>
-                            <td>{{ $fmt($game->scheduled_date) }}</td>
+                            <td>{{ $fmt($game->scheduled_at) }}@if ($game->scheduledTime()) <span class="muted">{{ $game->scheduledTime() }}</span>@endif</td>
                             <td class="right team">{{ $game->awayTeam->name }}</td>
                             <td class="center muted">@</td>
                             <td class="team">{{ $game->homeTeam->name }}</td>
