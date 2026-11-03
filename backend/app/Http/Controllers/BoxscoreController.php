@@ -133,6 +133,13 @@ class BoxscoreController extends Controller
             }
 
             foreach ($validated['batting'] as $line) {
+                // Con home run el bateador se impulsa al menos a sí mismo
+                foreach ($line['plate_appearances'] ?? [] as $appearance) {
+                    if ($appearance['result'] === 'HR' && (int) ($appearance['rbi'] ?? 0) < 1) {
+                        throw ValidationException::withMessages(['batting' => 'Un home run debe tener al menos 1 carrera impulsada.']);
+                    }
+                }
+
                 if (! empty($line['player_id']) && ! in_array((int) $line['player_id'], $allowed[(int) $line['team_id']] ?? [], true)) {
                     $team = $line['team_id'] === $game->away_team_id ? $game->awayTeam : $game->homeTeam;
                     throw ValidationException::withMessages(['batting' => "Hay jugadores que no están en el roster de {$team->name}."]);

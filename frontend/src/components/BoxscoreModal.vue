@@ -5,14 +5,15 @@
     <v-card class="rounded-xl pa-2" theme="light">
       <!-- Header -->
       <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
-        <div>
-          <div class="text-h6 font-weight-black text-grey-darken-4">Box Score</div>
-          <div v-if="game" class="text-subtitle-1 font-weight-bold text-grey-darken-4">
-            {{ game.away_team.name }} <span class="text-grey font-weight-regular">@</span> {{ game.home_team.name }}
-          </div>
-          <div v-if="game" class="text-body-2 text-grey-darken-1">
-            Partido #{{ game.game_number }} · {{ formatDate(game.scheduled_at) }}<template v-if="formatTime(game.scheduled_at)"> {{ formatTime(game.scheduled_at) }}</template>
-          </div>
+        <div class="text-h6 text-grey-darken-4 text-wrap">
+          <span class="font-weight-black">Box Score</span>
+          <template v-if="game">
+            <span class="text-grey font-weight-regular"> · </span>
+            <span class="font-weight-bold">{{ game.away_team.name }} <span class="text-grey font-weight-regular">@</span> {{ game.home_team.name }}</span>
+            <span class="text-grey-darken-1 font-weight-regular">
+              · Partido #{{ game.game_number }} · {{ formatDate(game.scheduled_at) }}<template v-if="formatTime(game.scheduled_at)"> {{ formatTime(game.scheduled_at) }}</template>
+            </span>
+          </template>
         </div>
         <v-btn icon="mdi-close" variant="text" density="comfortable" :disabled="saving" @click="dialog = false" />
       </v-card-title>
@@ -371,13 +372,13 @@
                     <div class="play-panel__options">
                       <span class="text-caption text-grey-darken-1 mr-1">RBI</span>
                       <v-chip
-                        v-for="rbi in [0, 1, 2, 3, 4]"
+                        v-for="rbi in [1, 2, 3, 4]"
                         :key="rbi"
                         size="small"
                         label
                         :color="toInt(panelPlay.rbi) === rbi ? 'success' : undefined"
                         :variant="toInt(panelPlay.rbi) === rbi ? 'flat' : 'outlined'"
-                        @click="panelPlay.rbi = rbi"
+                        @click="toggleRbi(panelPlay, rbi)"
                       >
                         {{ rbi }}
                       </v-chip>
@@ -945,7 +946,8 @@ const newLine = (data = {}) => ({
     inning: play.inning,
     result: play.result,
     notation: play.notation ?? '',
-    rbi: play.rbi ?? 0,
+    // Con home run se impulsa al menos a sí mismo (corrige turnos guardados con 0)
+    rbi: play.result === 'HR' ? Math.max(play.rbi ?? 0, 1) : (play.rbi ?? 0),
     bases: play.bases ?? (play.scored ? 4 : 0),
     scored: !!play.scored,
     out_on_base: !!play.out_on_base,
@@ -1410,6 +1412,13 @@ const goBack = () => {
 const goNext = () => {
   if (turnIndex.value === null) return
   turnIndex.value = turnIndex.value + 1 < sequence.value.turns.length ? turnIndex.value + 1 : null
+}
+
+// Las impulsadas se marcan y desmarcan con el mismo chip (sin selección son 0);
+// con home run no se pueden quitar porque se impulsa al menos a sí mismo
+const toggleRbi = (play, rbi) => {
+  if (toInt(play.rbi) !== rbi) play.rbi = rbi
+  else if (play.result !== 'HR') play.rbi = 0
 }
 
 // Al elegir la jugada del turno por capturar, el turno queda registrado en la casilla del bateador

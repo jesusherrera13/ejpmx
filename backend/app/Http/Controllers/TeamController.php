@@ -16,9 +16,9 @@ class TeamController extends Controller
 
     // Encabezados esperados en el archivo de importación => columna en BD
     private const IMPORT_HEADERS = [
-        'Nombre' => 'name',
-        'Nombre Corto' => 'short_name',
-        'Abreviación' => 'abbreviation',
+        'NOMBRE' => 'name',
+        'NOMBRE_CORTO' => 'short_name',
+        'ABREVIACION' => 'abbreviation',
     ];
 
     public function index()
@@ -71,7 +71,7 @@ class TeamController extends Controller
 
     /**
      * Importa equipos desde un archivo Excel/CSV con encabezados:
-     * Nombre | Nombre Corto | Abreviación.
+     * NOMBRE | NOMBRE_CORTO | ABREVIACION.
      * Si ya existe un equipo con el mismo nombre (sin distinguir mayúsculas) se actualiza.
      */
     public function import(Request $request)
@@ -123,7 +123,7 @@ class TeamController extends Controller
     public function template()
     {
         return $this->downloadTemplate(
-            ['Nombre' => 35, 'Nombre Corto' => 25, 'Abreviación' => 15],
+            ['NOMBRE' => 35, 'NOMBRE_CORTO' => 25, 'ABREVIACION' => 15],
             'ejpmx_plantilla_equipos.xlsx',
             'Equipos'
         );

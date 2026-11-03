@@ -75,7 +75,7 @@ export const useTeamsStore = defineStore('teams', {
       await downloadFile('/teams/template', 'ejpmx_plantilla_equipos.xlsx')
     },
 
-    // Sube un Excel (Nombre | Nombre Corto | Abreviación); crea o actualiza por nombre
+    // Sube un Excel (NOMBRE | NOMBRE_CORTO | ABREVIACION); crea o actualiza por nombre
     async importFile(file) {
       this.loading = true
       try {

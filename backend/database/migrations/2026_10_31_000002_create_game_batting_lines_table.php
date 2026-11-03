@@ -5,8 +5,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Box score de un partido: marcador final (R H E), carreras por entrada y bateo por jugador.
- * Las carreras siguen en home_score / away_score.
+ * Bateo por jugador de un partido: un renglón por bateador en el lineup de su equipo.
+ * Mientras no se elige al jugador, el renglón lleva un nombre provisional (placeholder).
  */
 return new class extends Migration
 {
@@ -15,37 +15,36 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('games', function (Blueprint $table) {
-            // score | linescore | batting | batting_full
-            $table->string('boxscore_mode', 20)->nullable()->after('away_score');
-            $table->unsignedSmallInteger('home_hits')->nullable()->after('boxscore_mode');
-            $table->unsignedSmallInteger('home_errors')->nullable()->after('home_hits');
-            $table->unsignedSmallInteger('away_hits')->nullable()->after('home_errors');
-            $table->unsignedSmallInteger('away_errors')->nullable()->after('away_hits');
-            // {"away": [0, 1, ...], "home": [2, 0, ..., null]}; null = no batearon esa entrada
-            $table->json('line_score')->nullable()->after('away_errors');
-        });
-
-        // Un renglón por bateador en el lineup de su equipo
         Schema::create('game_batting_lines', function (Blueprint $table) {
             $table->id();
             $table->foreignId('game_id')->constrained()->cascadeOnDelete();
             $table->foreignId('team_id')->constrained()->restrictOnDelete();
-            $table->foreignId('player_id')->constrained()->restrictOnDelete();
+            $table->foreignId('player_id')->nullable()->constrained()->restrictOnDelete();
+            $table->string('placeholder', 40)->nullable();
             $table->unsignedSmallInteger('batting_order');
+            $table->boolean('is_substitute')->default(false);
+            $table->unsignedTinyInteger('entered_inning')->nullable();
             $table->string('position', 3)->nullable();
             $table->unsignedSmallInteger('pa')->default(0);
             $table->unsignedSmallInteger('ab')->default(0);
             $table->unsignedSmallInteger('r')->default(0);
             $table->unsignedSmallInteger('h')->default(0);
             $table->unsignedSmallInteger('singles')->default(0);
+            $table->unsignedSmallInteger('ih')->default(0);
             $table->unsignedSmallInteger('doubles')->default(0);
             $table->unsignedSmallInteger('triples')->default(0);
             $table->unsignedSmallInteger('hr')->default(0);
             $table->unsignedSmallInteger('rbi')->default(0);
+            $table->unsignedSmallInteger('bb')->default(0);
+            $table->unsignedSmallInteger('ibb')->default(0);
+            $table->unsignedSmallInteger('hbp')->default(0);
+            $table->unsignedSmallInteger('sf')->default(0);
+            $table->unsignedSmallInteger('sh')->default(0);
+            $table->unsignedSmallInteger('roe')->default(0);
             $table->unsignedSmallInteger('so')->default(0);
             $table->unsignedSmallInteger('so_swinging')->default(0);
             $table->unsignedSmallInteger('so_looking')->default(0);
+            $table->unsignedSmallInteger('lob')->default(0);
             $table->unsignedSmallInteger('e')->default(0);
             $table->timestamps();
 
@@ -60,9 +59,5 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('game_batting_lines');
-
-        Schema::table('games', function (Blueprint $table) {
-            $table->dropColumn(['boxscore_mode', 'home_hits', 'home_errors', 'away_hits', 'away_errors', 'line_score']);
-        });
     }
 };

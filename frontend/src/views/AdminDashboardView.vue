@@ -382,6 +382,8 @@
       :columns="currentImport.columns"
       :example="currentImport.example"
       :importer="currentImport.store.importFile"
+      :previewer="currentImport.store.previewFile"
+      :preview-headers="currentImport.previewHeaders"
       :loading="currentImport.store.loading"
       @imported="totalItems = currentImport.count()"
     />
@@ -785,16 +787,25 @@ const importConfigs = {
     store: teamsStore,
     title: 'Cargar Plantilla de Equipos',
     hint: 'Si el nombre del equipo ya existe, el registro se actualizará.',
-    columns: ['Nombre', 'Nombre Corto', 'Abreviación'],
+    columns: ['NOMBRE', 'NOMBRE_CORTO', 'ABREVIACION'],
     example: ['Atléticos de Oakland', 'Atléticos', 'OAK'],
     count: () => teamsStore.teams.length
   },
   jugadores: {
     store: playersStore,
     title: 'Cargar Plantilla de Jugadores',
-    hint: 'Si la CURP ya existe, el jugador se actualizará. Fecha en formato aaaa-mm-dd.',
-    columns: ['APELLIDO 1', 'APELLIDO 2', 'NOMBRE', 'CURP', 'FECHA DE NACIMIENTO'],
-    example: ['Pérez', 'López', 'Juan', 'PELJ100515HDFRPN09', '2010-05-15'],
+    hint: 'Si la CURP ya existe, el jugador se actualizará. Fecha en formato dd/mm/aaaa; EQUIPO es opcional. Se leen todas las hojas del libro. Antes de guardar verás una vista previa; las filas cuya CURP no coincida con el nombre o la fecha se omitirán.',
+    columns: ['APELLIDO1', 'APELLIDO2', 'NOMBRE', 'CURP', 'FECHA_DE_NACIMIENTO', 'EQUIPO'],
+    example: ['Pérez', 'López', 'Juan', 'PELJ100515HDFRPNA4', '15/05/2010', 'SAN FRANCISCO GIANTS'],
+    // Columnas de la vista previa (campos de cada fila que regresa previewFile)
+    previewHeaders: [
+      { title: 'Apellido 1', key: 'last_name' },
+      { title: 'Apellido 2', key: 'second_last_name' },
+      { title: 'Nombre', key: 'first_name' },
+      { title: 'CURP', key: 'curp' },
+      { title: 'Fecha de nacimiento', key: 'birthdate' },
+      { title: 'Equipo', key: 'team' }
+    ],
     count: () => playersStore.players.length
   },
   torneos: {

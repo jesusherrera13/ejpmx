@@ -25,9 +25,20 @@ return new class extends Migration
             $table->unsignedInteger('game_number');
             $table->foreignId('home_team_id')->constrained('teams')->restrictOnDelete();
             $table->foreignId('away_team_id')->constrained('teams')->restrictOnDelete();
-            $table->date('scheduled_date')->nullable();
+            $table->dateTime('scheduled_at')->nullable();
+            // Box score: las carreras (R) van en home_score / away_score
             $table->unsignedSmallInteger('home_score')->nullable();
             $table->unsignedSmallInteger('away_score')->nullable();
+            // score | linescore | batting | batting_full
+            $table->string('boxscore_mode', 20)->nullable();
+            $table->unsignedSmallInteger('home_hits')->nullable();
+            $table->unsignedSmallInteger('home_errors')->nullable();
+            $table->unsignedSmallInteger('home_lob')->nullable();
+            $table->unsignedSmallInteger('away_hits')->nullable();
+            $table->unsignedSmallInteger('away_errors')->nullable();
+            $table->unsignedSmallInteger('away_lob')->nullable();
+            // {"away": [0, 1, ...], "home": [2, 0, ..., null]}; null = no batearon esa entrada
+            $table->json('line_score')->nullable();
             $table->timestamps();
 
             $table->unique(['tournament_id', 'game_number']);

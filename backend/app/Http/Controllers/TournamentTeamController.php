@@ -23,6 +23,22 @@ class TournamentTeamController extends Controller
     /**
      * Inscribe uno o varios equipos del mismo propietario que el torneo.
      */
+    /**
+     * Equipos que se pueden inscribir: activos, del mismo propietario que el torneo y aún no inscritos.
+     */
+    public function available(Tournament $tournament)
+    {
+        $this->ensureOwner($tournament);
+
+        return response()->json(
+            Team::ownedBy($tournament->user_id)
+                ->where('is_active', true)
+                ->whereNotIn('id', $tournament->teams()->select('teams.id'))
+                ->orderByRaw('LOWER(name)')
+                ->get(['id', 'name', 'short_name', 'abbreviation'])
+        );
+    }
+
     public function store(Request $request, Tournament $tournament)
     {
         $this->ensureOwner($tournament);
@@ -33,7 +49,7 @@ class TournamentTeamController extends Controller
             'team_ids.*' => [
                 'integer',
                 'distinct',
-                Rule::exists('teams', 'id')->where('user_id', $tournament->user_id)->whereNull('deleted_at'),
+                Rule::exists('teams', 'id')->where('user_id', $tournament->user_id)->where('is_active', true)->whereNull('deleted_at'),
             ],
         ], [], [
             'team_ids' => 'equipos',
@@ -43,6 +59,33 @@ class TournamentTeamController extends Controller
         $tournament->teams()->syncWithoutDetaching($validated['team_ids']);
 
         return response()->json($this->withRosterCount($tournament), 201);
+    }
+
+    /**
+     * Deja inscritos exactamente los equipos de team_ids: agrega los nuevos y retira los que ya no vienen
+     * (junto con su roster). Los nuevos deben ser activos y del mismo propietario que el torneo;
+     * los que ya estaban inscritos pueden quedarse aunque se hayan desactivado.
+     */
+    public function sync(Request $request, Tournament $tournament)
+    {
+        $this->ensureOwner($tournament);
+        $this->ensureWithoutCalendar($tournament);
+
+        $validated = $request->validate([
+            'team_ids' => 'present|array',
+            'team_ids.*' => 'integer|distinct',
+        ], [], [
+            'team_ids' => 'equipos',
+            'team_ids.*' => 'equipo',
+        ]);
+
+        $newIds = array_diff($validated['team_ids'], $tournament->teams()->pluck('teams.id')->all());
+        $allowed = Team::ownedBy($tournament->user_id)->where('is_active', true)->whereIn('id', $newIds)->count();
+        abort_if($allowed !== count($newIds), 422, 'Alguno de los equipos no está disponible para este torneo.');
+
+        $tournament->teams()->sync($validated['team_ids']);
+
+        return response()->json($this->withRosterCount($tournament));
     }
 
     public function destroy(Tournament $tournament, Team $team)

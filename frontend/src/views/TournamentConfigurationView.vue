@@ -44,6 +44,9 @@
             Equipos
             <v-chip size="x-small" class="ml-2" variant="tonal">{{ teamsStore.teams.length }}</v-chip>
           </v-tab>
+          <v-tab value="jugadores" class="text-none" prepend-icon="mdi-account-group">
+            Jugadores
+          </v-tab>
           <v-tab value="calendario" class="text-none" prepend-icon="mdi-calendar-month">
             Calendario
           </v-tab>
@@ -119,6 +122,76 @@
                   </v-menu>
                 </div>
               </template>
+            </div>
+          </v-window-item>
+
+          <!-- PESTAÑA: JUGADORES -->
+          <v-window-item value="jugadores">
+            <div class="gh-box">
+              <div class="gh-box__header ga-2">
+                <v-icon icon="mdi-account-group" size="18" class="text-grey-darken-1" />
+                <span class="font-weight-bold text-grey-darken-4">{{ players.length }}</span>
+                <span class="text-grey-darken-2 text-no-wrap">{{ players.length === 1 ? 'jugador en la temporada' : 'jugadores en la temporada' }}</span>
+                <v-spacer />
+                <v-text-field
+                  v-model="playerSearch"
+                  prepend-inner-icon="mdi-magnify"
+                  placeholder="Buscar jugador o equipo..."
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                  clearable
+                  style="max-width: 280px"
+                />
+                <v-menu location="bottom end">
+                  <template v-slot:activator="{ props: menuProps }">
+                    <v-btn
+                      v-bind="menuProps"
+                      color="black"
+                      size="small"
+                      variant="outlined"
+                      class="text-none font-weight-bold rounded-pill"
+                      append-icon="mdi-chevron-down"
+                      :loading="isExportingPlayers"
+                      :disabled="players.length === 0"
+                    >
+                      Acciones
+                    </v-btn>
+                  </template>
+                  <v-list density="compact" class="py-1">
+                    <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF" @click="exportPlayers('pdf')" />
+                    <v-list-item prepend-icon="mdi-microsoft-excel" title="XLS" @click="exportPlayers('xlsx')" />
+                  </v-list>
+                </v-menu>
+              </div>
+
+              <v-data-table
+                :headers="playerHeaders"
+                :items="players"
+                :search="playerSearch"
+                :custom-filter="matchesSearch"
+                :loading="loadingPlayers"
+                :items-per-page="25"
+                item-value="id"
+                class="admin-data-table bg-white"
+                density="compact"
+                no-data-text="Aún no hay jugadores en los rosters. Agrégalos desde Equipos → Configuración."
+              >
+                <template v-slot:item.team_name="{ item }">
+                  <div class="d-flex align-center">
+                    <v-avatar color="blue-darken-3" size="22" class="mr-2 text-white team-abbr font-weight-bold">
+                      {{ item.team_abbreviation }}
+                    </v-avatar>
+                    {{ item.team_name }}
+                  </div>
+                </template>
+                <template v-slot:item.full_name="{ item }">
+                  <span class="font-weight-bold text-black">{{ item.full_name }}</span>
+                </template>
+                <template v-slot:item.birthdate="{ item }">
+                  {{ item.birthdate ? formatDate(item.birthdate) : '—' }}
+                </template>
+              </v-data-table>
             </div>
           </v-window-item>
 
@@ -251,51 +324,125 @@
       </v-container>
     </v-main>
 
-    <!-- Agregar equipos -->
-    <v-dialog v-model="showAddDialog" max-width="720px">
+    <!-- Equipos del torneo: a la izquierda los seleccionados (inician con los inscritos), a la derecha los disponibles -->
+    <v-dialog v-model="showAddDialog" max-width="960px">
       <v-card class="rounded-xl pa-2" theme="light">
         <v-card-title class="text-h6 font-weight-black text-grey-darken-4 pt-4 px-4">
-          Agregar equipos
+          Equipos del torneo
         </v-card-title>
         <v-card-text>
-          <v-text-field
-            v-model="teamSearch"
-            prepend-inner-icon="mdi-magnify"
-            placeholder="Buscar equipo..."
-            variant="outlined"
-            density="compact"
-            hide-details
-            clearable
-            class="mb-3"
-          />
-          <v-card variant="outlined" color="grey-lighten-2" class="rounded-lg bg-white overflow-hidden">
-            <v-data-table
-              v-model="selectedTeamIds"
-              :headers="availableTeamHeaders"
-              :items="availableTeams"
-              :search="teamSearch"
-              :loading="allTeamsStore.loading"
-              :items-per-page="10"
-              item-value="id"
-              show-select
-              class="admin-data-table bg-white"
-              density="compact"
-              no-data-text="No hay más equipos disponibles"
-            >
-              <template v-slot:item.name="{ item }">
-                <div class="d-flex align-center py-1">
-                  <v-avatar color="blue-darken-3" size="24" class="mr-2 text-white team-abbr font-weight-bold">
-                    {{ item.abbreviation || 'EQ' }}
-                  </v-avatar>
-                  <span class="font-weight-bold text-black">{{ item.name }}</span>
+          <v-row dense>
+            <!-- Seleccionados -->
+            <v-col cols="12" md="6">
+              <v-card variant="outlined" color="grey-lighten-2" class="rounded-lg bg-white">
+                <div class="d-flex align-center px-3 py-2">
+                  <span class="text-subtitle-2 font-weight-bold text-grey-darken-4">Seleccionados</span>
+                  <v-chip size="x-small" class="ml-2" color="success" variant="tonal">{{ selectedTeams.length }}</v-chip>
+                  <v-spacer />
+                  <v-btn
+                    size="small"
+                    variant="text"
+                    color="grey-darken-1"
+                    class="text-capitalize"
+                    prepend-icon="mdi-close"
+                    :disabled="selectedTeams.length === 0"
+                    @click="selectedTeams = []"
+                  >
+                    Quitar todos
+                  </v-btn>
                 </div>
-              </template>
-            </v-data-table>
-          </v-card>
+                <v-divider />
+                <div v-if="selectedTeams.length === 0" class="pa-8 d-flex align-center justify-center text-center text-grey-darken-1 text-body-2 team-picker-list">
+                  Elige equipos de la lista de disponibles.
+                </div>
+                <v-list v-else density="compact" class="py-0 team-picker-list">
+                  <v-list-item v-for="team in selectedTeams" :key="team.id" @click="unselectTeam(team)">
+                    <template #prepend>
+                      <v-avatar color="blue-darken-3" size="24" class="mr-2 text-white team-abbr font-weight-bold">
+                        {{ team.abbreviation || 'EQ' }}
+                      </v-avatar>
+                    </template>
+                    <v-list-item-title class="font-weight-bold text-black text-body-2">{{ team.name }}</v-list-item-title>
+                    <v-list-item-subtitle class="text-caption">
+                      {{ team.short_name }}
+                      <template v-if="team.roster_count"> · {{ team.roster_count }} {{ team.roster_count === 1 ? 'jugador' : 'jugadores' }}</template>
+                    </v-list-item-subtitle>
+                    <template #append>
+                      <v-chip v-if="!enrolledIds.has(team.id)" size="x-small" label color="success" variant="tonal" class="mr-2">Nuevo</v-chip>
+                      <v-icon icon="mdi-close" size="small" color="grey-darken-1" />
+                    </template>
+                  </v-list-item>
+                </v-list>
+              </v-card>
+            </v-col>
+
+            <!-- Disponibles: del propietario del torneo y aún no inscritos -->
+            <v-col cols="12" md="6">
+              <v-card variant="outlined" color="grey-lighten-2" class="rounded-lg bg-white">
+                <div class="d-flex align-center px-3 py-2">
+                  <span class="text-subtitle-2 font-weight-bold text-grey-darken-4">Disponibles</span>
+                  <v-chip size="x-small" class="ml-2" variant="tonal">{{ remainingTeams.length }}</v-chip>
+                  <v-spacer />
+                  <v-btn
+                    size="small"
+                    variant="text"
+                    color="success"
+                    class="text-capitalize"
+                    prepend-icon="mdi-chevron-double-left"
+                    :disabled="remainingTeams.length === 0"
+                    @click="selectAllTeams"
+                  >
+                    Agregar todos
+                  </v-btn>
+                </div>
+                <v-divider />
+                <div class="px-3 pt-3">
+                  <v-text-field
+                    v-model="teamSearch"
+                    prepend-inner-icon="mdi-magnify"
+                    placeholder="Buscar equipo..."
+                    variant="outlined"
+                    density="compact"
+                    hide-details
+                    clearable
+                  />
+                </div>
+                <div v-if="loadingAvailableTeams" class="pa-8 mt-2 d-flex align-center justify-center team-picker-list">
+                  <v-progress-circular indeterminate color="primary" />
+                </div>
+                <div v-else-if="remainingTeams.length === 0" class="pa-8 mt-2 d-flex align-center justify-center text-center text-grey-darken-1 text-body-2 team-picker-list">
+                  {{ teamSearch ? 'Ningún equipo coincide con la búsqueda.' : 'No hay más equipos disponibles.' }}
+                </div>
+                <v-list v-else density="compact" class="py-0 mt-2 team-picker-list">
+                  <v-list-item v-for="team in remainingTeams" :key="team.id" @click="selectTeam(team)">
+                    <template #prepend>
+                      <v-icon icon="mdi-chevron-left" size="small" color="success" class="mr-1" />
+                      <v-avatar color="blue-darken-3" size="24" class="mr-2 text-white team-abbr font-weight-bold">
+                        {{ team.abbreviation || 'EQ' }}
+                      </v-avatar>
+                    </template>
+                    <v-list-item-title class="font-weight-bold text-black text-body-2">{{ team.name }}</v-list-item-title>
+                    <v-list-item-subtitle class="text-caption">{{ team.short_name }}</v-list-item-subtitle>
+                    <template #append>
+                      <v-chip v-if="enrolledIds.has(team.id)" size="x-small" label color="error" variant="tonal">Se retirará</v-chip>
+                    </template>
+                  </v-list-item>
+                </v-list>
+              </v-card>
+            </v-col>
+          </v-row>
+
+          <!-- Retirar un equipo borra también su roster en el torneo -->
+          <v-alert v-if="removedWithRoster.length" type="warning" variant="tonal" density="compact" class="text-body-2 mt-3">
+            Al guardar se retirará el roster de {{ removedWithRoster.map(team => `${team.name} (${team.roster_count})`).join(', ') }}.
+          </v-alert>
         </v-card-text>
         <v-card-actions class="pa-4 pt-0 justify-end ga-2">
           <span class="text-body-2 text-grey-darken-1 mr-auto">
-            {{ selectedTeamIds.length }} {{ selectedTeamIds.length === 1 ? 'equipo seleccionado' : 'equipos seleccionados' }}
+            {{ selectedTeams.length }} {{ selectedTeams.length === 1 ? 'equipo seleccionado' : 'equipos seleccionados' }}
+            <template v-if="addedCount || removedTeams.length">
+              ({{ [addedCount && `${addedCount} por agregar`, removedTeams.length && `${removedTeams.length} por retirar`].filter(Boolean).join(', ') }})
+            </template>
           </span>
           <v-btn variant="outlined" color="grey-darken-1" class="text-capitalize rounded-pill px-5" @click="showAddDialog = false">
             Cancelar
@@ -304,11 +451,11 @@
             color="success"
             variant="flat"
             class="text-capitalize rounded-pill px-5 font-weight-bold"
-            :disabled="selectedTeamIds.length === 0"
+            :disabled="loadingAvailableTeams || (!addedCount && !removedTeams.length)"
             :loading="teamsStore.loading"
-            @click="addTeams"
+            @click="saveTeams"
           >
-            Agregar
+            Guardar
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -362,7 +509,6 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useTournamentsStore } from '@/stores/tournaments'
 import { useTournamentTeamsStore } from '@/stores/tournamentTeams'
 import { useGamesStore } from '@/stores/games'
-import { useTeamsStore } from '@/stores/teams'
 import { useNotificationsStore } from '@/stores/notifications'
 import { getErrorMessage } from '@/utils/errors'
 import { formatDate, parseDate, toIsoDate } from '@/utils/dates'
@@ -378,7 +524,6 @@ const props = defineProps({
 const tournamentsStore = useTournamentsStore()
 const teamsStore = useTournamentTeamsStore()
 const gamesStore = useGamesStore()
-const allTeamsStore = useTeamsStore()
 const notify = useNotificationsStore()
 
 const tournament = ref(null)
@@ -387,37 +532,67 @@ const hasCalendar = computed(() => gamesStore.games.length > 0)
 
 // ---------- EQUIPOS ----------
 const showAddDialog = ref(false)
-const selectedTeamIds = ref([])
+const availableTeams = ref([])
+const loadingAvailableTeams = ref(false)
+const selectedTeams = ref([])
 const teamSearch = ref('')
 
-const availableTeamHeaders = [
-  { title: 'Equipo', key: 'name' },
-  { title: 'Nombre Corto', key: 'short_name' },
-  { title: 'Abreviación', key: 'abbreviation' }
-]
+// Búsqueda por nombre, nombre corto o abreviación, sin distinguir mayúsculas ni acentos
+const normalize = text => String(text ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 
-// Solo equipos activos del mismo propietario que el torneo y que aún no participan
-const availableTeams = computed(() => {
-  const enrolled = new Set(teamsStore.teams.map(team => team.id))
-  return allTeamsStore.teams.filter(team =>
-    team.is_active && !enrolled.has(team.id) && (!tournament.value || team.user_id === tournament.value.user_id)
+// Equipos guardados en el torneo; la selección inicia con ellos
+const enrolledIds = computed(() => new Set(teamsStore.teams.map(team => team.id)))
+const selectedIds = computed(() => new Set(selectedTeams.value.map(team => team.id)))
+
+// Disponibles: los inscritos que se quitaron de la selección y los que aún no participan,
+// filtrados por la búsqueda
+const remainingTeams = computed(() => {
+  const query = normalize(teamSearch.value).trim()
+  return [...teamsStore.teams, ...availableTeams.value].filter(team =>
+    !selectedIds.value.has(team.id)
+    && (!query || [team.name, team.short_name, team.abbreviation].some(value => normalize(value).includes(query)))
   )
 })
 
-const openAddDialog = () => {
-  selectedTeamIds.value = []
-  teamSearch.value = ''
-  showAddDialog.value = true
-  if (allTeamsStore.teams.length === 0) allTeamsStore.fetchTeams()
+const addedCount = computed(() => selectedTeams.value.filter(team => !enrolledIds.value.has(team.id)).length)
+const removedTeams = computed(() => teamsStore.teams.filter(team => !selectedIds.value.has(team.id)))
+const removedWithRoster = computed(() => removedTeams.value.filter(team => team.roster_count > 0))
+
+const selectTeam = team => {
+  selectedTeams.value = [...selectedTeams.value, team]
 }
 
-const addTeams = async () => {
+const unselectTeam = team => {
+  selectedTeams.value = selectedTeams.value.filter(item => item.id !== team.id)
+}
+
+const selectAllTeams = () => {
+  selectedTeams.value = [...selectedTeams.value, ...remainingTeams.value]
+}
+
+// El servidor solo regresa equipos activos del propietario del torneo que aún no están inscritos
+const openAddDialog = async () => {
+  selectedTeams.value = [...teamsStore.teams]
+  availableTeams.value = []
+  teamSearch.value = ''
+  showAddDialog.value = true
+  loadingAvailableTeams.value = true
   try {
-    await teamsStore.addTeams(props.id, selectedTeamIds.value)
-    notify.success('Equipos agregados al torneo')
+    availableTeams.value = await teamsStore.fetchAvailableTeams(props.id)
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al cargar los equipos disponibles'))
+  } finally {
+    loadingAvailableTeams.value = false
+  }
+}
+
+const saveTeams = async () => {
+  try {
+    await teamsStore.syncTeams(props.id, selectedTeams.value.map(team => team.id))
+    notify.success('Equipos del torneo actualizados')
     showAddDialog.value = false
   } catch (error) {
-    notify.error(getErrorMessage(error, 'Ocurrió un error al agregar los equipos'))
+    notify.error(getErrorMessage(error, 'Ocurrió un error al guardar los equipos'))
   }
 }
 
@@ -525,6 +700,51 @@ const exportCalendar = async (format, view) => {
     notify.error(getErrorMessage(error, 'Ocurrió un error al generar el archivo'))
   } finally {
     isExporting.value = false
+  }
+}
+
+// ---------- JUGADORES ----------
+// Jugadores en los rosters de los equipos inscritos; se recargan al abrir la pestaña
+const players = ref([])
+const loadingPlayers = ref(false)
+const playerSearch = ref('')
+const isExportingPlayers = ref(false)
+
+const playerHeaders = [
+  { title: 'Equipo', key: 'team_name' },
+  { title: 'Jugador', key: 'full_name' },
+  { title: 'CURP', key: 'curp' },
+  { title: 'Nacimiento', key: 'birthdate' }
+]
+
+// Búsqueda indistinta a acentos y mayúsculas en cada columna
+const matchesSearch = (value, query) => normalize(value).includes(normalize(query).trim())
+
+const loadPlayers = async () => {
+  loadingPlayers.value = true
+  try {
+    players.value = await teamsStore.fetchPlayers(props.id)
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al cargar los jugadores'))
+  } finally {
+    loadingPlayers.value = false
+  }
+}
+
+watch(tab, (value) => {
+  if (value === 'jugadores') loadPlayers()
+})
+
+// format: 'pdf' o 'xlsx'
+const exportPlayers = async (format) => {
+  isExportingPlayers.value = true
+  try {
+    const name = (tournament.value?.name || 'torneo').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/gi, '_').toLowerCase()
+    await teamsStore.exportPlayers(props.id, format, `jugadores_${name}.${format}`)
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al generar el archivo'))
+  } finally {
+    isExportingPlayers.value = false
   }
 }
 
@@ -662,6 +882,12 @@ onMounted(async () => {
 
 .config-tabs {
   border-bottom: 1px solid #e2e8f0;
+}
+
+/* Listas del modal de agregar equipos: altura fija con scroll propio */
+.team-picker-list {
+  height: 360px;
+  overflow-y: auto;
 }
 
 /* Contenedor estilo lista de archivos de GitHub */

@@ -16,12 +16,14 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 trait HandlesSpreadsheets
 {
     /**
-     * Valida el archivo "file" del request y devuelve sus filas como
-     * [numeroDeFila => [campo => valor]], omitiendo filas vacías.
+     * Valida el archivo "file" del request y devuelve las filas de todas sus hojas como
+     * [fila => [campo => valor]], omitiendo filas y hojas vacías. Con varias hojas la fila
+     * se identifica con el nombre de la hoja, p. ej. "2 (Baltimore)".
      *
      * @param  array<string, string>  $headers  Encabezado en el archivo => campo
+     * @param  array<string, string>  $optional  Encabezados que pueden faltar (el campo queda en null)
      */
-    protected function readSpreadsheet(Request $request, array $headers): array
+    protected function readSpreadsheet(Request $request, array $headers, array $optional = []): array
     {
         $request->validate([
             // "txt" porque los CSV suelen detectarse como text/plain; "extensions" valida el nombre del archivo
@@ -34,49 +36,57 @@ trait HandlesSpreadsheets
         ]);
 
         try {
-            $sheet = IOFactory::load($request->file('file')->getRealPath())->getActiveSheet();
-            // Valores sin formato: las fechas llegan como número serial de Excel
-            $rows = $sheet->toArray(null, true, false, false);
+            $sheets = [];
+            foreach (IOFactory::load($request->file('file')->getRealPath())->getAllSheets() as $sheet) {
+                // Valores sin formato: las fechas llegan como número serial de Excel
+                $rows = $sheet->toArray(null, true, false, false);
+                if ($this->hasValues(array_slice($rows, 1))) {
+                    $sheets[$sheet->getTitle()] = $rows;
+                }
+            }
         } catch (\Throwable $e) {
             $this->failImport('No se pudo leer el archivo. Verifica que sea un Excel válido.');
         }
 
-        if (count($rows) < 2) {
+        if (! $sheets) {
             $this->failImport('El archivo no contiene registros.');
         }
 
-        // Mapear cada encabezado esperado a su índice de columna
+        // Mapear cada encabezado esperado a su campo
         $expected = [];
-        foreach ($headers as $header => $field) {
+        foreach ($headers + $optional as $header => $field) {
             $expected[$this->normalizeHeader($header)] = $field;
         }
 
-        $columns = [];
-        foreach (array_shift($rows) as $index => $header) {
-            $key = $this->normalizeHeader((string) $header);
-            if (isset($expected[$key])) {
-                $columns[$expected[$key]] = $index;
-            }
-        }
-
-        if (array_diff($expected, array_keys($columns))) {
-            $this->failImport('Faltan encabezados en el archivo. Se esperan: ' . implode(', ', array_keys($headers)) . '.');
-        }
-
         $result = [];
-        foreach ($rows as $i => $row) {
-            $data = [];
-            foreach ($columns as $field => $index) {
-                $value = $row[$index] ?? null;
-                $data[$field] = is_string($value) ? trim($value) : $value;
+        foreach ($sheets as $title => $rows) {
+            $columns = [];
+            foreach (array_shift($rows) as $index => $header) {
+                $key = $this->normalizeHeader((string) $header);
+                if (isset($expected[$key])) {
+                    $columns[$expected[$key]] = $index;
+                }
             }
 
-            if (collect($data)->every(fn ($value) => $value === null || $value === '')) {
-                continue;
+            if (array_diff($headers, array_keys($columns))) {
+                $where = count($sheets) > 1 ? " de la hoja \"{$title}\"" : ' del archivo';
+                $this->failImport("Faltan encabezados en la primera fila{$where}. Se esperan: " . implode(', ', array_keys($headers + $optional)) . '.');
             }
 
-            // +1 por el encabezado, +1 porque Excel inicia en 1
-            $result[$i + 2] = $data;
+            foreach ($rows as $i => $row) {
+                $data = [];
+                foreach ($headers + $optional as $field) {
+                    $value = isset($columns[$field]) ? ($row[$columns[$field]] ?? null) : null;
+                    $data[$field] = is_string($value) ? trim($value) : $value;
+                }
+
+                if (! $this->hasValues([$data])) {
+                    continue;
+                }
+
+                // +1 por el encabezado, +1 porque Excel inicia en 1
+                $result[count($sheets) > 1 ? ($i + 2) . " ({$title})" : $i + 2] = $data;
+            }
         }
 
         return $result;
@@ -128,9 +138,16 @@ trait HandlesSpreadsheets
         throw new HttpResponseException(response()->json(['message' => $message], 422));
     }
 
-    // "Abreviación " -> "abreviacion"
+    // Alguna fila trae al menos un valor
+    private function hasValues(array $rows): bool
+    {
+        return collect($rows)->flatten()->contains(fn ($value) => $value !== null && trim((string) $value) !== '');
+    }
+
+    // "Abreviación " -> "abreviacion"; sin espacios ni guiones bajos, así "APELLIDO 1" = "APELLIDO1"
+    // y "Nombre Corto" = "NOMBRE_CORTO"
     private function normalizeHeader(string $header): string
     {
-        return Str::of($header)->ascii()->lower()->squish()->toString();
+        return Str::of($header)->ascii()->lower()->replaceMatches('/[\s_]+/', '')->toString();
     }
 }

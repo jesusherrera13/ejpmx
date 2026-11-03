@@ -75,7 +75,23 @@ export const usePlayersStore = defineStore('players', {
       await downloadFile('/players/template', 'ejpmx_plantilla_jugadores.xlsx')
     },
 
-    // Sube un Excel (APELLIDO 1 | APELLIDO 2 | NOMBRE | CURP | FECHA DE NACIMIENTO); crea o actualiza por CURP
+    // Vista previa del Excel sin guardar: { rows: [{ row, data, player_id, action, errors }] }
+    async previewFile(file) {
+      this.loading = true
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        const response = await axiosClient.post('/players/import/preview', formData)
+        return response.data
+      } catch (err) {
+        console.error('Error previewing players import:', err)
+        throw err
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // Sube un Excel (APELLIDO1 | APELLIDO2 | NOMBRE | CURP | FECHA_DE_NACIMIENTO | EQUIPO, todas las hojas); crea o actualiza por CURP
     async importFile(file) {
       this.loading = true
       try {

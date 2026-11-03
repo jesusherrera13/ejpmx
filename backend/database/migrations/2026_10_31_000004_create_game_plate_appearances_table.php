@@ -26,7 +26,13 @@ return new class extends Migration
             // Anotación del scorebook: 6-3, F8, L4, 5-4-3...
             $table->string('notation', 20)->nullable();
             $table->unsignedTinyInteger('rbi')->default(0);
+            // Base a la que llegó el bateador (4 = anotó)
+            $table->unsignedTinyInteger('bases')->default(0);
             $table->boolean('scored')->default(false);
+            // Out como corredor: anotación (p. ej. 6-4) y turno del lineup en que ocurrió
+            $table->boolean('out_on_base')->default(false);
+            $table->string('out_notation', 20)->nullable();
+            $table->unsignedSmallInteger('out_during_order')->nullable();
             $table->timestamps();
 
             $table->index(['game_batting_line_id', 'inning']);

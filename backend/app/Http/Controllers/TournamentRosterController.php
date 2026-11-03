@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\HandlesSpreadsheets;
 use App\Models\Player;
 use App\Models\Team;
 use App\Models\Tournament;
 use App\Models\TournamentRosterPlayer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -15,6 +17,8 @@ use Illuminate\Validation\Rule;
  */
 class TournamentRosterController extends Controller
 {
+    use HandlesSpreadsheets;
+
     private const PLAYER_COLUMNS = ['players.id', 'players.first_name', 'players.last_name', 'players.second_last_name', 'players.curp', 'players.birthdate'];
 
     /**
@@ -68,6 +72,119 @@ class TournamentRosterController extends Controller
         TournamentRosterPlayer::where('tournament_team_id', $tournamentTeamId)->where('player_id', $player)->delete();
 
         return response()->json($this->payload($tournament, $team));
+    }
+
+    /**
+     * Vista previa de la carga del roster desde Excel/CSV: solo se lee la columna CURP
+     * (las demás se ignoran, así sirve también la plantilla o el export de jugadores).
+     */
+    public function previewImport(Request $request, Tournament $tournament, Team $team)
+    {
+        $tournamentTeamId = $this->rosterOwner($tournament, $team);
+        $rows = $this->readSpreadsheet($request, ['CURP' => 'curp']);
+
+        return response()->json(['rows' => $this->analyzeImport($rows, $tournament, $tournamentTeamId)]);
+    }
+
+    // Agrega al roster los jugadores válidos del archivo; las filas con errores se omiten
+    public function import(Request $request, Tournament $tournament, Team $team)
+    {
+        $tournamentTeamId = $this->rosterOwner($tournament, $team);
+        $rows = $this->readSpreadsheet($request, ['CURP' => 'curp']);
+        $analysis = $this->analyzeImport($rows, $tournament, $tournamentTeamId);
+
+        $created = 0;
+        $errors = [];
+
+        DB::transaction(function () use ($analysis, $tournament, $tournamentTeamId, &$created, &$errors) {
+            foreach ($analysis as $item) {
+                if ($item['errors']) {
+                    $errors[] = "Fila {$item['row']}: " . implode(' ', $item['errors']);
+                    continue;
+                }
+
+                if ($item['action'] === 'create') {
+                    TournamentRosterPlayer::create([
+                        'tournament_team_id' => $tournamentTeamId,
+                        'tournament_id' => $tournament->id,
+                        'player_id' => $item['player_id'],
+                    ]);
+                    $created++;
+                }
+            }
+        });
+
+        return response()->json([
+            'message' => "Carga completada: {$created} " . ($created === 1 ? 'jugador agregado' : 'jugadores agregados') . ' al roster.',
+            'created' => $created,
+            'updated' => 0,
+            'errors' => $errors,
+        ] + $this->payload($tournament, $team));
+    }
+
+    /**
+     * Busca cada CURP entre los jugadores del propietario del torneo y decide: create (se agrega),
+     * unchanged (ya está en este roster) o skip (con errores).
+     *
+     * @return list<array{row: int|string, data: array, player_id: ?int, action: string, errors: string[]}>
+     */
+    private function analyzeImport(array $rows, Tournament $tournament, int $tournamentTeamId): array
+    {
+        $curps = collect($rows)->map(fn ($row) => Str::upper(trim((string) $row['curp'])))->unique();
+
+        $players = Player::ownedBy($tournament->user_id)
+            ->whereIn('curp', $curps)
+            ->get(['id', 'first_name', 'last_name', 'second_last_name', 'curp', 'is_active'])
+            ->keyBy(fn ($player) => Str::upper($player->curp));
+
+        // Equipo del torneo en cuyo roster está ya cada jugador
+        $rostered = DB::table('tournament_roster_players')
+            ->join('tournament_team', 'tournament_team.id', '=', 'tournament_roster_players.tournament_team_id')
+            ->join('teams', 'teams.id', '=', 'tournament_team.team_id')
+            ->where('tournament_roster_players.tournament_id', $tournament->id)
+            ->whereIn('tournament_roster_players.player_id', $players->pluck('id'))
+            ->get(['tournament_roster_players.player_id', 'tournament_roster_players.tournament_team_id', 'teams.name'])
+            ->keyBy('player_id');
+
+        $result = [];
+        $seenCurps = [];
+
+        foreach ($rows as $rowNumber => $row) {
+            $curp = Str::upper(trim((string) $row['curp']));
+            $player = $players->get($curp);
+            $errors = [];
+            $action = 'create';
+
+            // readSpreadsheet ya omite las filas sin CURP
+            if (isset($seenCurps[$curp])) {
+                $errors[] = "CURP repetida en el archivo (fila {$seenCurps[$curp]}).";
+            } elseif (! $player) {
+                $errors[] = 'No existe un jugador con esta CURP en tu catálogo.';
+            } elseif (! $player->is_active) {
+                $errors[] = 'El jugador está inactivo.';
+            } elseif ($roster = $rostered->get($player->id)) {
+                if ((int) $roster->tournament_team_id === $tournamentTeamId) {
+                    $action = 'unchanged';
+                } else {
+                    $errors[] = "Ya está en el roster de {$roster->name} en este torneo.";
+                }
+            }
+
+            $seenCurps[$curp] ??= $rowNumber;
+
+            $result[] = [
+                'row' => $rowNumber,
+                'data' => [
+                    'curp' => $curp,
+                    'name' => $player ? collect([$player->first_name, $player->last_name, $player->second_last_name])->filter()->implode(' ') : null,
+                ],
+                'player_id' => $player?->id,
+                'action' => $errors ? 'skip' : $action,
+                'errors' => $errors,
+            ];
+        }
+
+        return $result;
     }
 
     private function payload(Tournament $tournament, Team $team): array

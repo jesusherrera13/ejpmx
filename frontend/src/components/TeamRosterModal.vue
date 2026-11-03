@@ -3,6 +3,21 @@
 <template>
   <v-dialog v-model="dialog" max-width="1200px" scrollable>
     <v-card class="rounded-xl pa-2" theme="light">
+      <!-- Bloquea el modal mientras se agrega o quita un jugador -->
+      <v-overlay
+        :model-value="saving"
+        contained
+        persistent
+        scrim="white"
+        opacity="0.7"
+        class="align-center justify-center"
+      >
+        <div class="d-flex flex-column align-center">
+          <v-progress-circular indeterminate color="blue-darken-3" size="48" width="4" />
+          <div class="mt-3 font-weight-bold text-grey-darken-3">Actualizando roster...</div>
+        </div>
+      </v-overlay>
+
       <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
         <div class="d-flex align-center">
           <v-avatar v-if="team" color="blue-darken-3" size="32" class="mr-3 text-white team-abbr font-weight-bold">
@@ -26,6 +41,18 @@
               <v-icon icon="mdi-account-group" size="18" class="mr-2 text-grey-darken-1" />
               <span class="font-weight-bold text-grey-darken-4">{{ roster.length }}</span>
               <span class="ml-1 text-grey-darken-2">{{ roster.length === 1 ? 'jugador en el roster' : 'jugadores en el roster' }}</span>
+              <v-spacer />
+              <v-btn
+                variant="outlined"
+                color="grey-darken-1"
+                size="small"
+                class="text-capitalize rounded-pill"
+                prepend-icon="mdi-file-upload-outline"
+                :disabled="loading || saving"
+                @click="showImport = true"
+              >
+                Cargar desde Excel
+              </v-btn>
             </div>
             <v-card variant="outlined" color="grey-lighten-2" class="rounded-lg bg-white overflow-hidden">
               <v-data-table
@@ -34,15 +61,13 @@
                 :loading="loading"
                 :items-per-page="10"
                 item-value="id"
-                class="admin-data-table bg-white"
+                class="admin-data-table roster-table bg-white"
                 density="compact"
+                @dblclick:row="(event, { item }) => removePlayer(item)"
                 no-data-text="Aún no hay jugadores en el roster. Agrégalos desde la tabla de disponibles."
               >
                 <template v-slot:item.name="{ item }">
                   <span class="font-weight-bold text-black">{{ fullName(item) }}</span>
-                </template>
-                <template v-slot:item.birthdate="{ item }">
-                  {{ item.birthdate ? formatDate(item.birthdate) : '—' }}
                 </template>
                 <template v-slot:item.actions="{ item }">
                   <v-btn
@@ -71,42 +96,40 @@
                 hide-details
                 clearable
               />
-              <v-btn
-                color="success"
-                variant="flat"
-                class="text-none font-weight-bold"
-                prepend-icon="mdi-arrow-left"
-                :disabled="selected.length === 0"
-                :loading="saving"
-                @click="addSelected"
-              >
-                Agregar ({{ selected.length }})
-              </v-btn>
             </div>
             <v-card variant="outlined" color="grey-lighten-2" class="rounded-lg bg-white overflow-hidden">
               <v-data-table
-                v-model="selected"
                 :headers="availableHeaders"
                 :items="available"
                 :search="search"
+                :custom-filter="matchesSearch"
                 :loading="loading"
                 :items-per-page="10"
                 item-value="id"
-                show-select
-                class="admin-data-table bg-white"
+                class="admin-data-table roster-table bg-white"
                 density="compact"
+                @dblclick:row="(event, { item }) => addPlayer(item)"
                 no-data-text="No hay jugadores disponibles: todos están en algún roster de este torneo o inactivos."
               >
                 <template v-slot:item.name="{ item }">
                   <span class="font-weight-bold text-black">{{ fullName(item) }}</span>
                 </template>
-                <template v-slot:item.birthdate="{ item }">
-                  {{ item.birthdate ? formatDate(item.birthdate) : '—' }}
+                <template v-slot:item.actions="{ item }">
+                  <v-btn
+                    icon="mdi-arrow-left"
+                    size="x-small"
+                    variant="text"
+                    color="success"
+                    title="Agregar al roster"
+                    :disabled="saving"
+                    @click="addPlayer(item)"
+                  />
                 </template>
               </v-data-table>
             </v-card>
             <div class="text-caption text-grey-darken-1 mt-2">
               Se muestran tus jugadores activos que no están en el roster de ningún equipo de este torneo.
+              Doble clic en un jugador para agregarlo o quitarlo del roster.
             </div>
           </v-col>
         </v-row>
@@ -118,6 +141,22 @@
         </v-btn>
       </v-card-actions>
     </v-card>
+
+    <!-- Carga del roster por Excel: se identifica a cada jugador por su CURP -->
+    <ImportTemplateModal
+      v-if="showImport"
+      v-model="showImport"
+      :title="`Cargar roster de ${team?.name}`"
+      hint="El jugador se identifica por su CURP; el nombre es solo de referencia. Cada CURP debe pertenecer a uno de tus jugadores activos que no esté en el roster de otro equipo de este torneo. Antes de guardar verás una vista previa."
+      :columns="['NOMBRE_COMPLETO', 'CURP']"
+      :example="['Juan Pérez López', 'PELJ100515HDFRPNA4']"
+      :importer="importFile"
+      :previewer="previewFile"
+      :preview-headers="importPreviewHeaders"
+      :action-labels="importActionLabels"
+      :loading="importing"
+      @imported="apply"
+    />
   </v-dialog>
 </template>
 
@@ -126,7 +165,7 @@ import { ref, computed, watch } from 'vue'
 import { useTournamentTeamsStore } from '@/stores/tournamentTeams'
 import { useNotificationsStore } from '@/stores/notifications'
 import { getErrorMessage } from '@/utils/errors'
-import { formatDate } from '@/utils/dates'
+import ImportTemplateModal from '@/components/ImportTemplateModal.vue'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -146,31 +185,35 @@ const dialog = computed({
 
 const roster = ref([])
 const available = ref([])
-const selected = ref([])
 const search = ref('')
 const loading = ref(false)
 const saving = ref(false)
+const showImport = ref(false)
+const importing = ref(false)
 
 // La búsqueda de la tabla usa el nombre completo y la CURP
 const rosterHeaders = [
   { title: 'Jugador', key: 'name', value: item => fullName(item) },
   { title: 'CURP', key: 'curp' },
-  { title: 'Nacimiento', key: 'birthdate' },
   { title: '', key: 'actions', align: 'end', sortable: false }
 ]
 
+// El icono para agregar va a la izquierda, del lado del roster
 const availableHeaders = [
+  { title: '', key: 'actions', sortable: false, width: 40 },
   { title: 'Jugador', key: 'name', value: item => fullName(item) },
-  { title: 'CURP', key: 'curp' },
-  { title: 'Nacimiento', key: 'birthdate' }
+  { title: 'CURP', key: 'curp' }
 ]
+
+// Búsqueda indistinta a acentos y mayúsculas ("martinez diaz" encuentra "Martínez Díaz")
+const normalize = text => String(text ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+const matchesSearch = (value, query) => normalize(value).includes(normalize(query).trim())
 
 const fullName = player => [player.first_name, player.last_name, player.second_last_name].filter(Boolean).join(' ')
 
 const apply = (data) => {
   roster.value = data.roster
   available.value = data.available
-  selected.value = selected.value.filter(id => data.available.some(player => player.id === id))
 }
 
 // Se carga cada vez que se abre para el equipo elegido
@@ -178,7 +221,6 @@ watch(() => [props.modelValue, props.team?.id], async ([open]) => {
   if (!open || !props.team) return
   roster.value = []
   available.value = []
-  selected.value = []
   search.value = ''
   loading.value = true
   try {
@@ -190,21 +232,44 @@ watch(() => [props.modelValue, props.team?.id], async ([open]) => {
   }
 }, { immediate: true })
 
-const addSelected = async () => {
+const addPlayer = async (player) => {
+  if (saving.value) return
   saving.value = true
   try {
-    const count = selected.value.length
-    apply(await teamsStore.addRosterPlayers(props.tournamentId, props.team.id, selected.value))
-    selected.value = []
-    notify.success(count === 1 ? 'Jugador agregado al roster' : `${count} jugadores agregados al roster`)
+    apply(await teamsStore.addRosterPlayers(props.tournamentId, props.team.id, [player.id]))
   } catch (error) {
-    notify.error(getErrorMessage(error, 'Ocurrió un error al agregar los jugadores'))
+    notify.error(getErrorMessage(error, 'Ocurrió un error al agregar al jugador'))
   } finally {
     saving.value = false
   }
 }
 
+const importPreviewHeaders = [
+  { title: 'CURP', key: 'curp' },
+  { title: 'Jugador', key: 'name' }
+]
+
+// En el roster no hay actualizaciones: "create" agrega y "unchanged" es que ya estaba
+const importActionLabels = {
+  create: { label: 'por agregar', short: 'Agregar' },
+  update: { label: null },
+  unchanged: { label: 'ya en el roster', short: 'Ya está' }
+}
+
+const withImporting = async (request) => {
+  importing.value = true
+  try {
+    return await request()
+  } finally {
+    importing.value = false
+  }
+}
+
+const previewFile = file => withImporting(() => teamsStore.previewRosterFile(props.tournamentId, props.team.id, file))
+const importFile = file => withImporting(() => teamsStore.importRosterFile(props.tournamentId, props.team.id, file))
+
 const removePlayer = async (player) => {
+  if (saving.value) return
   saving.value = true
   try {
     apply(await teamsStore.removeRosterPlayer(props.tournamentId, props.team.id, player.id))
@@ -219,6 +284,12 @@ const removePlayer = async (player) => {
 <style scoped>
 .team-abbr {
   font-size: 0.6rem !important;
+}
+
+/* Doble clic agrega/quita: evita que el doble clic seleccione texto */
+.roster-table :deep(tbody .v-data-table__tr) {
+  cursor: pointer;
+  user-select: none;
 }
 
 /* Mismo estilo que las tablas de catálogos del panel */

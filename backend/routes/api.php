@@ -10,6 +10,7 @@ use App\Http\Controllers\ContentTypeController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\TournamentController;
+use App\Http\Controllers\TournamentPlayerController;
 use App\Http\Controllers\TournamentRosterController;
 use App\Http\Controllers\TournamentTeamController;
 use App\Http\Controllers\BoxscoreController;
@@ -40,6 +41,7 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
     // PLAYER
     Route::get('/players/template', [PlayerController::class, 'template']);
     Route::post('/players/import', [PlayerController::class, 'import']);
+    Route::post('/players/import/preview', [PlayerController::class, 'previewImport']);
     Route::apiResource('/players', PlayerController::class);
 
     // TOURNAMENT
@@ -49,11 +51,18 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
 
     // TOURNAMENT TEAM
     Route::get('/tournaments/{tournament}/teams', [TournamentTeamController::class, 'index']);
+    Route::get('/tournaments/{tournament}/teams/available', [TournamentTeamController::class, 'available']);
     Route::post('/tournaments/{tournament}/teams', [TournamentTeamController::class, 'store']);
+    Route::put('/tournaments/{tournament}/teams', [TournamentTeamController::class, 'sync']);
     Route::delete('/tournaments/{tournament}/teams/{team}', [TournamentTeamController::class, 'destroy']);
     Route::get('/tournaments/{tournament}/teams/{team}/players', [TournamentRosterController::class, 'index']);
     Route::post('/tournaments/{tournament}/teams/{team}/players', [TournamentRosterController::class, 'store']);
+    Route::post('/tournaments/{tournament}/teams/{team}/players/import', [TournamentRosterController::class, 'import']);
+    Route::post('/tournaments/{tournament}/teams/{team}/players/import/preview', [TournamentRosterController::class, 'previewImport']);
     Route::delete('/tournaments/{tournament}/teams/{team}/players/{player}', [TournamentRosterController::class, 'destroy'])->whereNumber('player');
+    Route::get('/tournaments/{tournament}/players', [TournamentPlayerController::class, 'index']);
+    Route::get('/tournaments/{tournament}/players/export/xlsx', [TournamentPlayerController::class, 'exportXlsx']);
+    Route::get('/tournaments/{tournament}/players/export/pdf', [TournamentPlayerController::class, 'exportPdf']);
 
     // GAME
     Route::get('/tournaments/{tournament}/games', [GameController::class, 'index']);
