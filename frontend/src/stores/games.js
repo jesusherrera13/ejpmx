@@ -57,6 +57,30 @@ export const useGamesStore = defineStore('games', {
       return response.data
     },
 
+    // Tabla de posiciones a una fecha ('YYYY-MM-DD'; sin fecha, la del último partido jugado):
+    // { date, first_date, last_date, games_played, games_total, standings }
+    async fetchStandings(tournamentId, date = null) {
+      const response = await axiosClient.get(`/tournaments/${tournamentId}/standings`, { params: date ? { date } : {} })
+      return response.data
+    },
+
+    // Bateo de los jugadores a una fecha ('YYYY-MM-DD'; sin fecha, hoy): { date, games, players }
+    async fetchBattingStats(tournamentId, date = null) {
+      const response = await axiosClient.get(`/tournaments/${tournamentId}/stats/batting`, { params: date ? { date } : {} })
+      return response.data
+    },
+
+    // format: 'pdf' o 'xlsx'; la tabla de posiciones a la fecha
+    async exportStandings(tournamentId, format, date, filename) {
+      await downloadFile(`/tournaments/${tournamentId}/standings/export/${format}?date=${date}`, filename)
+    },
+
+    // format: 'pdf' o 'xlsx'; con teamId solo los jugadores de ese equipo
+    async exportBattingStats(tournamentId, format, date, teamId, filename) {
+      const team = teamId ? `&team_id=${teamId}` : ''
+      await downloadFile(`/tournaments/${tournamentId}/stats/batting/export/${format}?date=${date}${team}`, filename)
+    },
+
     // format: 'xlsx' o 'pdf'; view: 'games' (partidos) o 'series'
     async exportCalendar(tournamentId, format, view, filename) {
       await downloadFile(`/tournaments/${tournamentId}/games/export/${format}?view=${view}`, filename)

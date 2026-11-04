@@ -97,7 +97,10 @@
     <v-dialog v-model="showPreview" max-width="1200px" persistent scrollable>
       <v-card class="rounded-xl pa-2" theme="light">
         <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
-          <span class="text-h6 font-weight-black text-grey-darken-4">Vista previa</span>
+          <div>
+            <div class="text-h6 font-weight-black text-grey-darken-4">Vista previa</div>
+            <div v-if="previewSubtitle" class="text-body-2 text-grey-darken-1">{{ previewSubtitle }}</div>
+          </div>
           <v-btn icon="mdi-close" variant="text" density="comfortable" :disabled="loading" @click="showPreview = false" />
         </v-card-title>
 
@@ -209,6 +212,8 @@ const props = defineProps({
   // para mostrar la vista previa antes de importar; previewHeaders son las columnas de "data"
   previewer: Function,
   previewHeaders: { type: Array, default: () => [] },
+  // Opcional: texto bajo el título de la vista previa (p. ej. el equipo del roster)
+  previewSubtitle: String,
   // Opcional: textos de los estados que reemplazan a los de ACTION_DEFAULTS, p. ej. { create: { label, short } }
   actionLabels: { type: Object, default: () => ({}) },
   loading: Boolean

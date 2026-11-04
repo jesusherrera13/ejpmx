@@ -86,9 +86,9 @@
           <h1 class="text-subtitle-1 font-weight-bold text-grey-darken-4 mr-auto">
             {{ currentModule.title }}
           </h1>
-          <!-- Calendario: se elige el torneo en lugar de buscar -->
+          <!-- Calendario y Posiciones: se elige el torneo en lugar de buscar -->
           <v-select
-            v-if="activeTab === 'calendario'"
+            v-if="usesTournamentPicker"
             v-model="calendarTournamentId"
             :items="tournamentsStore.tournaments"
             item-title="name"
@@ -102,8 +102,22 @@
             no-data-text="No hay torneos registrados"
             class="bg-white text-field-search"
           />
+          <!-- Posiciones y Estadísticas: fecha a la que se calculan -->
           <v-text-field
-            v-else
+            v-if="activeTab === 'posiciones' || activeTab === 'estadisticas'"
+            v-model="reportDate"
+            type="date"
+            :min="activeTab === 'posiciones' ? standingsData?.first_date : undefined"
+            :max="activeTab === 'posiciones' ? standingsData?.last_date : undefined"
+            :disabled="!calendarTournamentId"
+            prepend-inner-icon="mdi-calendar"
+            variant="outlined"
+            density="compact"
+            hide-details
+            class="bg-white standings-date"
+          />
+          <v-text-field
+            v-if="!usesTournamentPicker"
             v-model="search"
             prepend-inner-icon="mdi-magnify"
             placeholder="Buscar..."
@@ -112,7 +126,28 @@
             hide-details
             class="bg-white text-field-search"
           />
-          <v-menu v-if="activeTab !== 'calendario'" location="bottom end">
+          <!-- Posiciones y Estadísticas: descarga de la tabla a la fecha -->
+          <v-menu v-if="activeTab === 'posiciones' || activeTab === 'estadisticas'" location="bottom end">
+            <template v-slot:activator="{ props }">
+              <v-btn
+                v-bind="props"
+                color="black"
+                size="small"
+                class="text-capitalize rounded-pill font-weight-bold px-4"
+                append-icon="mdi-chevron-down"
+                :loading="isExportingReport"
+                :disabled="!calendarTournamentId || !reportDate"
+                flat
+              >
+                Acciones
+              </v-btn>
+            </template>
+            <v-list density="compact" class="py-1">
+              <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF" @click="exportReport('pdf')" />
+              <v-list-item prepend-icon="mdi-microsoft-excel" title="XLS" @click="exportReport('xlsx')" />
+            </v-list>
+          </v-menu>
+          <v-menu v-if="!usesTournamentPicker" location="bottom end">
             <template v-slot:activator="{ props }">
               <v-btn
                 v-bind="props"
@@ -281,6 +316,33 @@
               :byes="gamesStore.byes"
               :loading="gamesStore.loading"
               :empty-text="calendarTournamentId ? 'El torneo aún no tiene calendario. Genéralo desde Torneos > Configuración.' : 'Selecciona un torneo para ver sus partidos.'"
+            />
+          </div>
+
+          <!-- Módulo: POSICIONES -->
+          <div v-else-if="activeTab === 'posiciones'" class="bg-white">
+            <div v-if="standingsData && calendarTournamentId" class="px-4 pt-4 text-body-2 text-grey-darken-2">
+              Posiciones al {{ formatLongDate(standingsData.date) }}:
+              {{ standingsData.games_played }} de {{ standingsData.games_total }} partidos jugados.
+            </div>
+            <StandingsTable
+              :standings="calendarTournamentId ? standingsData?.standings || [] : []"
+              :loading="standingsLoading"
+              :empty-text="calendarTournamentId ? 'No hay equipos inscritos en este torneo.' : 'Selecciona un torneo para ver sus posiciones.'"
+            />
+          </div>
+
+          <!-- Módulo: ESTADÍSTICAS -->
+          <div v-else-if="activeTab === 'estadisticas'" class="bg-white">
+            <div v-if="statsData && calendarTournamentId" class="px-4 pt-4 text-body-2 text-grey-darken-2">
+              Bateo al {{ formatLongDate(statsData.date) }}:
+              {{ statsData.games }} {{ statsData.games === 1 ? 'partido' : 'partidos' }} con box score capturado.
+            </div>
+            <BattingStatsTable
+              v-model:team-id="statsTeamId"
+              :players="calendarTournamentId ? statsData?.players || [] : []"
+              :loading="statsLoading"
+              :empty-text="calendarTournamentId ? 'No hay estadísticas a esta fecha: aún no se captura el bateo de ningún partido.' : 'Selecciona un torneo para ver las estadísticas de sus jugadores.'"
             />
           </div>
 
@@ -461,6 +523,9 @@ import { usePlayersStore } from '@/stores/players'
 import { useTournamentsStore } from '@/stores/tournaments'
 import { useGamesStore } from '@/stores/games'
 import TournamentSchedule from '@/components/TournamentSchedule.vue'
+import StandingsTable from '@/components/StandingsTable.vue'
+import BattingStatsTable from '@/components/BattingStatsTable.vue'
+import { parseDate } from '@/utils/dates'
 
 // Asumo que crearás un store para el Blog similar a los demás
 import { useBlogsStore } from '@/stores/blogs' 
@@ -537,6 +602,8 @@ const menuItems = ref([
   { id: 'jugadores', title: 'Jugadores', icon: 'mdi-account-badge' },
   { id: 'torneos', title: 'Torneos', icon: 'mdi-trophy' },
   { id: 'calendario', title: 'Calendario', icon: 'mdi-calendar-month' },
+  { id: 'posiciones', title: 'Posiciones', icon: 'mdi-format-list-numbered' },
+  { id: 'estadisticas', title: 'Estadísticas', icon: 'mdi-chart-box-outline' },
   { id: 'blog', title: 'Blog de Noticias', icon: 'mdi-newspaper-variant-outline' }
 ])
 
@@ -553,7 +620,7 @@ const filteredMenuItems = computed(() => {
 
   let allowedIds = []
   if (user.roles[0].id == 2) {
-    allowedIds.push('equipos','jugadores','torneos','calendario','blog')
+    allowedIds.push('equipos','jugadores','torneos','calendario','posiciones','estadisticas','blog')
   }
   else if (user.roles[0].id == 3) {
     allowedIds.push('blog')
@@ -686,6 +753,14 @@ const loadModuleData = async (tabId) => {
         await tournamentsStore.fetchTournaments()
         if (calendarTournamentId.value) await gamesStore.fetchGames(calendarTournamentId.value)
         break
+      case 'posiciones':
+        await tournamentsStore.fetchTournaments()
+        if (calendarTournamentId.value) await loadStandings()
+        break
+      case 'estadisticas':
+        await tournamentsStore.fetchTournaments()
+        if (calendarTournamentId.value) await loadStats()
+        break
       case 'jugadores':
         await playersStore.fetchPlayers()
         totalItems.value = playersStore.players.length
@@ -703,11 +778,99 @@ watch(activeTab, (newTab) => {
   if (newTab) loadModuleData(newTab)
 })
 
-// Módulo Calendario: partidos del torneo seleccionado
+// Módulos Calendario y Posiciones: comparten el torneo seleccionado
+const usesTournamentPicker = computed(() => ['calendario', 'posiciones', 'estadisticas'].includes(activeTab.value))
 const calendarTournamentId = ref(null)
 watch(calendarTournamentId, (tournamentId) => {
-  if (tournamentId) gamesStore.fetchGames(tournamentId)
+  if (!tournamentId) return
+  if (activeTab.value === 'posiciones') {
+    // Otro torneo: la fecha vuelve a la del último partido jugado
+    standingsDate.value = null
+    loadStandings()
+  } else if (activeTab.value === 'estadisticas') {
+    loadStats()
+  } else {
+    gamesStore.fetchGames(tournamentId)
+  }
 })
+
+// Módulo Posiciones: tabla calculada con los partidos jugados hasta la fecha elegida
+const standingsDate = ref(null)
+const standingsData = ref(null)
+const standingsLoading = ref(false)
+
+const loadStandings = async () => {
+  standingsLoading.value = true
+  try {
+    standingsData.value = await gamesStore.fetchStandings(calendarTournamentId.value, standingsDate.value)
+    // Sin fecha elegida el servidor usa la del último partido jugado
+    standingsDate.value = standingsData.value.date
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al calcular las posiciones'))
+  } finally {
+    standingsLoading.value = false
+  }
+}
+
+watch(standingsDate, (date, previous) => {
+  if (date && previous && date !== standingsData.value?.date) loadStandings()
+})
+
+// Módulo Estadísticas: bateo de los jugadores a la fecha elegida (por omisión, hoy)
+const statsDate = ref(null)
+const statsData = ref(null)
+const statsLoading = ref(false)
+const statsTeamId = ref(null)
+
+const loadStats = async () => {
+  statsLoading.value = true
+  try {
+    statsData.value = await gamesStore.fetchBattingStats(calendarTournamentId.value, statsDate.value)
+    statsDate.value = statsData.value.date
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al calcular las estadísticas'))
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+watch(statsDate, (date, previous) => {
+  if (date && previous && date !== statsData.value?.date) loadStats()
+})
+
+// Campo de fecha del encabezado: cada módulo guarda la suya
+const reportDate = computed({
+  get: () => activeTab.value === 'estadisticas' ? statsDate.value : standingsDate.value,
+  set: (value) => {
+    if (activeTab.value === 'estadisticas') statsDate.value = value
+    else standingsDate.value = value
+  }
+})
+
+// Descarga en PDF o XLS de la tabla que se ve (Estadísticas: con el equipo filtrado)
+const isExportingReport = ref(false)
+const exportReport = async (format) => {
+  const tournament = tournamentsStore.tournaments.find(item => item.id === calendarTournamentId.value)
+  const slug = text => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '').toLowerCase()
+  isExportingReport.value = true
+  try {
+    if (activeTab.value === 'posiciones') {
+      await gamesStore.exportStandings(calendarTournamentId.value, format, reportDate.value, `posiciones_${slug(tournament?.name)}_${reportDate.value}.${format}`)
+    } else {
+      const team = statsData.value?.players.find(player => player.team.id === statsTeamId.value)?.team
+      const name = [slug(tournament?.name), team && slug(team.name)].filter(Boolean).join('_')
+      await gamesStore.exportBattingStats(calendarTournamentId.value, format, reportDate.value, statsTeamId.value, `estadisticas_${name}_${reportDate.value}.${format}`)
+    }
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al generar el archivo'))
+  } finally {
+    isExportingReport.value = false
+  }
+}
+
+// "domingo 27 de sep"
+const longDateFormatter = new Intl.DateTimeFormat('es-MX', { weekday: 'long', day: 'numeric', month: 'short' })
+const formatLongDate = value => value ? longDateFormatter.format(parseDate(value)) : ''
 
 onMounted(() => {
   if (activeTab.value) loadModuleData(activeTab.value)
@@ -978,6 +1141,11 @@ const getCoverImage = (item) => {
 .text-field-search {
   flex: 0 1 320px;
   min-width: 200px;
+}
+
+.standings-date {
+  flex: 0 1 190px;
+  min-width: 170px;
 }
 
 .admin-data-table {

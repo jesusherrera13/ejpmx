@@ -153,6 +153,7 @@
       :importer="importFile"
       :previewer="previewFile"
       :preview-headers="importPreviewHeaders"
+      :preview-subtitle="`Roster de ${team?.name}`"
       :action-labels="importActionLabels"
       :loading="importing"
       @imported="apply"
@@ -245,8 +246,8 @@ const addPlayer = async (player) => {
 }
 
 const importPreviewHeaders = [
-  { title: 'CURP', key: 'curp' },
-  { title: 'Jugador', key: 'name' }
+  { title: 'Jugador', key: 'name' },
+  { title: 'CURP', key: 'curp' }
 ]
 
 // En el roster no hay actualizaciones: "create" agrega y "unchanged" es que ya estaba

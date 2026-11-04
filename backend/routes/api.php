@@ -11,6 +11,8 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\TournamentController;
 use App\Http\Controllers\TournamentPlayerController;
+use App\Http\Controllers\PlayerStatsController;
+use App\Http\Controllers\StandingsController;
 use App\Http\Controllers\TournamentRosterController;
 use App\Http\Controllers\TournamentTeamController;
 use App\Http\Controllers\BoxscoreController;
@@ -63,6 +65,14 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
     Route::get('/tournaments/{tournament}/players', [TournamentPlayerController::class, 'index']);
     Route::get('/tournaments/{tournament}/players/export/xlsx', [TournamentPlayerController::class, 'exportXlsx']);
     Route::get('/tournaments/{tournament}/players/export/pdf', [TournamentPlayerController::class, 'exportPdf']);
+
+    // STANDINGS
+    Route::get('/tournaments/{tournament}/standings', [StandingsController::class, 'index']);
+    Route::get('/tournaments/{tournament}/standings/export/{format}', [StandingsController::class, 'export'])->whereIn('format', ['xlsx', 'pdf']);
+
+    // PLAYER STATS
+    Route::get('/tournaments/{tournament}/stats/batting', [PlayerStatsController::class, 'index']);
+    Route::get('/tournaments/{tournament}/stats/batting/export/{format}', [PlayerStatsController::class, 'export'])->whereIn('format', ['xlsx', 'pdf']);
 
     // GAME
     Route::get('/tournaments/{tournament}/games', [GameController::class, 'index']);
