@@ -2,7 +2,7 @@
     
 
     <!-- 2. NAVBAR PRINCIPAL (Se queda igual, Vuetify la apilará automáticamente debajo) -->
-    <v-app-bar flat color="#002D62" class="text-white px-md-8" height="56" order="1">
+    <v-app-bar flat color="brand-dark" class="text-white px-md-8" height="56" order="1">
       <div class="d-flex align-center mr-6">
         <span class="font-weight-black text-h6 tracking-wider">EL JUEGO PERFECTO</span>
         <span class="text-caption font-weight-medium ml-1 text-grey-lighten-1">MX</span>
@@ -43,7 +43,7 @@
             <template v-slot:activator="{ props }">
               <v-avatar 
                 v-bind="props" 
-                color="orange-darken-3" 
+                color="secondary" 
                 class="cursor-pointer text-white font-weight-bold elevation-1" 
                 size="36"
               >
@@ -62,7 +62,7 @@
                 <!-- Avatar Central (Soporta Foto de Perfil o Inicial) -->
                 <div class="d-flex justify-center my-3">
                   <v-avatar 
-                    color="orange-darken-3" 
+                    color="secondary" 
                     size="76" 
                     class="text-white text-h4 font-weight-medium elevation-2"
                     :image="authStore.user.avatarUrl || undefined"
@@ -355,7 +355,7 @@
                 </h2>
                 <v-btn
                   variant="text"
-                  color="#002D62"
+                  color="primary"
                   class="text-none font-weight-bold text-caption"
                   append-icon="mdi-chevron-right"
                 >
@@ -411,7 +411,7 @@
             <!-- BLOQUE: TITULARES -->
             <v-card flat class="pa-5 rounded-lg bg-white mb-6">
               <h2 class="text-h6 font-weight-black mb-4 border-bottom pb-2 text-grey-darken-4 d-flex align-center">
-                <v-icon icon="mdi-newspaper-variant-outline" class="mr-2" color="#002D62" />
+                <v-icon icon="mdi-newspaper-variant-outline" class="mr-2" color="primary" />
                 Titulares
               </h2>
 
@@ -423,7 +423,7 @@
                   link
                 >
                   <template v-slot:prepend>
-                    <v-avatar color="#002D62" class="text-white" size="36">
+                    <v-avatar color="brand-surface" class="text-white" size="36">
                       <v-icon size="18">{{ news.icon || 'mdi-baseball' }}</v-icon>
                     </v-avatar>
                   </template>
@@ -438,7 +438,7 @@
             <!-- BLOQUE: JUEGO DE ESTRELLAS 2026 -->
             <v-card flat class="pa-5 rounded-lg bg-white">
               <h2 class="text-h6 font-weight-black mb-4 border-bottom pb-2 text-grey-darken-4 d-flex align-center">
-                <v-icon icon="mdi-star-outline" class="mr-2" color="#002D62" />
+                <v-icon icon="mdi-star-outline" class="mr-2" color="primary" />
                 Juego de Estrellas 2026
               </h2>
 

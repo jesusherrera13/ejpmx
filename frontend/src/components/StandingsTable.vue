@@ -24,7 +24,7 @@
           <tr v-for="row in standings" :key="row.team.id">
             <td class="team-col">
               <div class="d-flex align-center">
-                <v-avatar color="blue-darken-3" size="26" class="mr-2 text-white team-abbr font-weight-bold">
+                <v-avatar color="brand-surface" size="26" class="mr-2 text-white team-abbr font-weight-bold">
                   {{ row.team.abbreviation }}
                 </v-avatar>
                 <span class="font-weight-bold text-grey-darken-4">{{ row.team.name }}</span>

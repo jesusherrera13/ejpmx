@@ -26,15 +26,61 @@
         </div>
 
         <template v-else-if="ready">
-          <!-- Modalidad -->
-          <v-btn-toggle v-model="mode" mandatory density="compact" variant="outlined" divided color="primary" class="mb-4 flex-wrap">
-            <v-btn v-for="item in MODES" :key="item.value" :value="item.value" size="small" class="text-none">{{ item.title }}</v-btn>
-          </v-btn-toggle>
-          <div class="text-caption text-grey-darken-1 mb-3">{{ currentMode.hint }}</div>
+          <!-- Modalidad y, a la derecha, el scorecard en PDF (se genera con lo guardado del partido) -->
+          <div class="d-flex flex-wrap align-center ga-2 mb-4">
+            <v-btn-toggle v-model="mode" mandatory density="compact" variant="outlined" divided color="primary" class="flex-wrap">
+              <v-btn v-for="item in MODES" :key="item.value" :value="item.value" size="small" class="text-none">{{ item.title }}</v-btn>
+            </v-btn-toggle>
+            <v-spacer />
+            <!-- Agregar o quitar entradas (Line Score y Scorecard), a la izquierda de Acciones -->
+            <template v-if="showInnings">
+              <v-btn size="small" variant="outlined" class="text-none" prepend-icon="mdi-plus" :disabled="lineScore.away.length >= 30" @click="addInning">Entrada</v-btn>
+              <v-btn
+                size="small"
+                variant="outlined"
+                class="text-none"
+                prepend-icon="mdi-minus"
+                :disabled="lineScore.away.length <= 1 || lastInningHasPlays"
+                :title="lastInningHasPlays ? 'La última entrada tiene turnos capturados' : ''"
+                @click="removeInning"
+              >
+                Entrada
+              </v-btn>
+            </template>
+            <v-menu location="bottom end">
+              <template v-slot:activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  color="black"
+                  size="small"
+                  class="text-capitalize rounded-pill font-weight-bold px-4"
+                  append-icon="mdi-chevron-down"
+                  :loading="exportingPdf"
+                  :disabled="saving"
+                  flat
+                >
+                  Acciones
+                </v-btn>
+              </template>
+              <v-list density="compact" class="py-1">
+                <!-- PDF de la pestaña que se está viendo, con lo guardado del partido -->
+                <v-list-subheader :title="pdfUnavailable">{{ currentMode.title }} guardado en PDF</v-list-subheader>
+                <template v-if="modeHasLineup">
+                  <v-list-item prepend-icon="mdi-file-pdf-box" title="Ambos equipos" :disabled="!!pdfUnavailable" @click="exportBoxscore('both')" />
+                  <v-list-item prepend-icon="mdi-file-pdf-box" :title="game.away_team.name" :disabled="!!pdfUnavailable" @click="exportBoxscore('away')" />
+                  <v-list-item prepend-icon="mdi-file-pdf-box" :title="game.home_team.name" :disabled="!!pdfUnavailable" @click="exportBoxscore('home')" />
+                </template>
+                <v-list-item v-else prepend-icon="mdi-file-pdf-box" title="PDF" :disabled="!!pdfUnavailable" @click="exportBoxscore('both')" />
+                <v-divider class="my-1" />
+                <v-list-item prepend-icon="mdi-book-open-variant" title="Glosario" subtitle="Significado de las abreviaciones" @click="glossaryDialog = true" />
+              </v-list>
+            </v-menu>
+          </div>
+          <div class="modal-note text-grey-darken-1 mb-3">{{ currentMode.hint }}</div>
 
           <!-- Marcador: entradas (Line Score) + R H E -->
           <div class="box-wrap mb-4">
-            <table class="box-table">
+            <table class="box-table box-table--score">
               <thead>
                 <tr>
                   <th class="text-left">Equipo</th>
@@ -92,24 +138,10 @@
             </table>
           </div>
 
-          <div v-if="showInnings" class="d-flex ga-2 mb-4">
-            <v-btn size="small" variant="outlined" class="text-none" prepend-icon="mdi-plus" :disabled="lineScore.away.length >= 30" @click="addInning">Entrada</v-btn>
-            <v-btn
-              size="small"
-              variant="outlined"
-              class="text-none"
-              prepend-icon="mdi-minus"
-              :disabled="lineScore.away.length <= 1 || lastInningHasPlays"
-              :title="lastInningHasPlays ? 'La última entrada tiene turnos capturados' : ''"
-              @click="removeInning"
-            >
-              Entrada
-            </v-btn>
-          </div>
 
           <!-- Bateo por equipo -->
           <template v-if="isBatting">
-            <v-tabs v-model="battingSide" color="primary" density="compact" class="mb-2">
+            <v-tabs v-model="battingSide" color="primary" density="compact" class="mb-2 team-tabs">
               <v-tab v-for="side in SIDES" :key="side" :value="side" class="text-none">
                 {{ teamOf(side).name }}
                 <v-chip size="x-small" class="ml-2" variant="tonal">{{ batting[side].length }}</v-chip>
@@ -165,8 +197,9 @@
 
             <!-- Scorecard: captura turno por turno en el orden al bat -->
             <div v-if="mode === 'scorecard'" class="play-panel mb-3">
-              <div v-if="batting[battingSide].length === 0" class="d-flex flex-wrap align-center ga-2 text-body-2 text-grey-darken-1 pa-3">
-                <span class="mr-auto">Agrega el lineup de {{ teamOf(battingSide).name }} para capturar sus turnos, o empieza con uno provisional y asigna a los jugadores después.</span>
+              <div v-if="batting[battingSide].length === 0" class="d-flex flex-wrap align-center ga-2 modal-note text-grey-darken-1 pa-3">
+                <span class="order-last ml-auto text-right">Agrega el lineup de {{ teamOf(battingSide).name }} para capturar sus turnos, o empieza con uno provisional y asigna a los jugadores después.</span>
+                <v-btn size="small" variant="flat" color="success" class="text-none" prepend-icon="mdi-account-plus" @click="addBatter">Agregar bateador</v-btn>
                 <v-btn
                   size="small"
                   variant="flat"
@@ -182,13 +215,57 @@
                   Lineup provisional (9)
                 </v-btn>
               </div>
-              <div v-else-if="substitutesWithoutEntry.length" class="text-body-2 text-error pa-3">
-                <v-icon icon="mdi-alert-circle-outline" size="18" class="mr-1" />
-                Indica en qué entrada entró {{ substitutesWithoutEntry.map(playerName).join(', ') }} (columna "Entró" del lineup) para seguir capturando.
+              <div v-else-if="substitutesWithoutEntry.length" class="d-flex flex-wrap align-center ga-2 modal-note pa-3">
+                <span class="order-last ml-auto text-right text-error">
+                  <v-icon icon="mdi-alert-circle-outline" size="18" class="mr-1" />
+                  Indica en qué entrada entró {{ substitutesWithoutEntry.map(playerName).join(', ') }} (columna "Entró" del lineup) para seguir capturando.
+                </span>
+                <v-btn size="small" variant="outlined" color="success" class="text-none font-weight-bold" prepend-icon="mdi-account-plus" @click="addBatter">Agregar bateador</v-btn>
+                <v-btn
+                  size="small"
+                  variant="outlined"
+                  color="success"
+                  class="text-none font-weight-bold"
+                  prepend-icon="mdi-clipboard-account"
+                  title="Abre el roster del equipo; con doble clic en un jugador se agrega al lineup"
+                  :disabled="rosterIsEmpty"
+                  @click="openRosterDialog"
+                >
+                  Agregar del roster
+                </v-btn>
               </div>
-              <div v-else-if="!panelTurn" class="text-body-2 text-grey-darken-1 pa-3">No hay turnos por capturar.</div>
-              <div v-else-if="panelTurn.inning > innings" class="d-flex flex-wrap align-center ga-2 pa-3 text-body-2">
-                <span class="mr-auto">Se capturaron las {{ innings }} entradas de {{ teamOf(battingSide).name }}.</span>
+              <div v-else-if="!panelTurn" class="d-flex flex-wrap align-center ga-2 modal-note pa-3">
+                <span class="order-last ml-auto text-right text-grey-darken-1">No hay turnos por capturar.</span>
+                <v-btn size="small" variant="outlined" color="success" class="text-none font-weight-bold" prepend-icon="mdi-account-plus" @click="addBatter">Agregar bateador</v-btn>
+                <v-btn
+                  size="small"
+                  variant="outlined"
+                  color="success"
+                  class="text-none font-weight-bold"
+                  prepend-icon="mdi-clipboard-account"
+                  title="Abre el roster del equipo; con doble clic en un jugador se agrega al lineup"
+                  :disabled="rosterIsEmpty"
+                  @click="openRosterDialog"
+                >
+                  Agregar del roster
+                </v-btn>
+              </div>
+              <div v-else-if="panelTurn.inning > innings" class="d-flex flex-wrap align-center ga-2 pa-3 modal-note">
+                <span class="order-last ml-auto text-right">Se capturaron las {{ innings }} entradas de {{ teamOf(battingSide).name }}.</span>
+                <v-btn size="small" variant="outlined" color="success" class="text-none font-weight-bold" prepend-icon="mdi-account-plus" @click="addBatter">Agregar bateador</v-btn>
+                <v-btn
+                  size="small"
+                  variant="outlined"
+                  color="success"
+                  class="text-none font-weight-bold"
+                  prepend-icon="mdi-clipboard-account"
+                  title="Abre el roster del equipo; con doble clic en un jugador se agrega al lineup"
+                  :disabled="rosterIsEmpty"
+                  @click="openRosterDialog"
+                >
+                  Agregar del roster
+                </v-btn>
+                <v-btn size="small" variant="outlined" class="text-none" prepend-icon="mdi-book-open-variant" title="Significado de las abreviaciones" @click="glossaryDialog = true">Glosario</v-btn>
                 <v-btn size="small" variant="outlined" class="text-none" prepend-icon="mdi-arrow-left" :disabled="!canGoBack" @click="goBack">Anterior</v-btn>
                 <v-btn size="small" variant="outlined" class="text-none" prepend-icon="mdi-plus" :disabled="innings >= 30" @click="addInning">Entrada extra</v-btn>
               </div>
@@ -204,13 +281,22 @@
                     </span>
                     <v-chip v-if="turnIndex === null" size="x-small" color="primary" variant="tonal" class="ml-2">Por capturar</v-chip>
                   </div>
-                  <v-btn size="small" variant="outlined" class="text-none" prepend-icon="mdi-arrow-left" :disabled="!canGoBack" @click="goBack">Anterior</v-btn>
+                  <v-btn size="small" variant="outlined" class="text-none" prepend-icon="mdi-book-open-variant" title="Significado de las abreviaciones" @click="glossaryDialog = true">Glosario</v-btn>
+                <v-btn size="small" variant="outlined" class="text-none" prepend-icon="mdi-arrow-left" :disabled="!canGoBack" @click="goBack">Anterior</v-btn>
                   <v-btn size="small" variant="flat" color="black" class="text-none" append-icon="mdi-arrow-right" :disabled="turnIndex === null" @click="goNext">Siguiente</v-btn>
                   <v-menu location="bottom end">
                     <template v-slot:activator="{ props: menuProps }">
                       <v-btn v-bind="menuProps" icon="mdi-dots-vertical" size="small" variant="text" title="Más acciones" />
                     </template>
                     <v-list density="compact" class="py-1">
+                      <v-list-item prepend-icon="mdi-account-plus" title="Agregar bateador" @click="addBatter" />
+                      <v-list-item
+                        prepend-icon="mdi-clipboard-account"
+                        title="Agregar del roster"
+                        :disabled="rosterIsEmpty"
+                        @click="openRosterDialog"
+                      />
+                      <v-divider class="my-1" />
                       <v-list-item
                         prepend-icon="mdi-flag-checkered"
                         title="Terminar entrada"
@@ -389,7 +475,7 @@
             </div>
 
             <div class="box-wrap">
-              <table class="box-table">
+              <table class="box-table box-table--lineup">
                 <thead>
                   <tr>
                     <th class="order">#</th>
@@ -456,10 +542,14 @@
                           {
                             'sc-cell--active': panelTurn && panelTurn.line === line && panelTurn.inning === inning,
                             'sc-cell--empty': cellPlays(line, inning).length === 0,
-                            'sc-cell--played': cellPlays(line, inning).length > 0
+                            'sc-cell--played': cellPlays(line, inning).length > 0,
+                            'sc-cell--unused': isUnusedCell(battingSide, line, inning),
+                            'sc-cell--next': nextUpCells.get(line)?.has(inning)
                           }
                         ]"
-                        :title="cellPlays(line, inning).length ? 'Ver este turno' : 'Los turnos se capturan en orden con Anterior / Siguiente'"
+                        :title="cellPlays(line, inning).length
+                          ? 'Ver este turno'
+                          : isUnusedCell(battingSide, line, inning) ? 'No bateó en esta entrada' : 'Los turnos se capturan en orden con Anterior / Siguiente'"
                         @click="openTurn(line, inning)"
                       >
                         <div v-for="(play, playIndex) in cellPlays(line, inning)" :key="playIndex" class="sc-play" :class="{ 'sc-play--hit': isHit(play) }">
@@ -475,6 +565,13 @@
                           <div v-if="lobByPlay.get(play)" class="sc-lob" :title="`Hizo el tercer out y dejó ${lobByPlay.get(play)} en base`">
                             Dejó {{ lobByPlay.get(play) }}
                           </div>
+                        </div>
+                        <div
+                          v-if="nextUpCells.get(line)?.has(inning)"
+                          class="sc-next"
+                          :title="`Se quedó en turno al cerrar la entrada: abre la ${inning + 1}ª`"
+                        >
+                          <v-icon icon="mdi-arrow-right" size="12" />{{ inning + 1 }}ª
                         </div>
                       </td>
                     </template>
@@ -533,6 +630,8 @@
               </table>
             </div>
 
+            <!-- En el Scorecard estos botones están en el panel de captura -->
+            <template v-if="mode !== 'scorecard'">
             <v-btn
               size="small"
               variant="outlined"
@@ -567,9 +666,50 @@
             >
               Lineup provisional (9)
             </v-btn>
+            </template>
           </template>
         </template>
       </v-card-text>
+
+      <!-- Glosario: significado de las abreviaciones del scorecard -->
+      <v-dialog v-model="glossaryDialog" max-width="900px" scrollable>
+        <v-card class="rounded-xl pa-2" theme="light">
+          <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
+            <span class="text-h6 font-weight-black text-grey-darken-4">Glosario</span>
+            <v-btn icon="mdi-close" variant="text" density="comfortable" @click="glossaryDialog = false" />
+          </v-card-title>
+          <v-divider class="my-2" />
+          <v-card-text class="pt-2">
+            <v-row dense>
+              <v-col v-for="section in GLOSSARY" :key="section.title" cols="12" md="6">
+                <div class="glossary-title">{{ section.title }}</div>
+                <div v-if="section.note" class="modal-note text-grey-darken-1 mb-1">{{ section.note }}</div>
+                <table class="glossary-table">
+                  <tbody>
+                    <tr v-for="entry in section.entries" :key="entry.term">
+                      <td class="glossary-term">{{ entry.term }}</td>
+                      <td>{{ entry.meaning }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </v-col>
+            </v-row>
+          </v-card-text>
+          <v-card-actions class="pa-4 pt-0 justify-end ga-2">
+            <v-btn
+              variant="outlined"
+              color="black"
+              class="text-capitalize rounded-pill px-5 font-weight-bold"
+              prepend-icon="mdi-file-pdf-box"
+              :loading="exportingGlossary"
+              @click="exportGlossary"
+            >
+              PDF
+            </v-btn>
+            <v-btn color="black" variant="flat" class="text-capitalize rounded-pill px-5 font-weight-bold" @click="glossaryDialog = false">Listo</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
 
       <!-- Roster del equipo: doble clic en un jugador para agregarlo al lineup -->
       <v-dialog v-model="rosterDialog" max-width="720px" scrollable>
@@ -647,6 +787,9 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { formatDate, formatTime } from '@/utils/dates'
+import { downloadFile } from '@/utils/download'
+import { getErrorMessage } from '@/utils/errors'
+import { useNotificationsStore } from '@/stores/notifications'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -899,6 +1042,80 @@ const SCORECARD_COLUMNS = [
   { key: 'lob', label: 'LOB', title: 'Corredores que dejó en base al hacer el tercer out', derived: true }
 ]
 
+// Glosario: jugadas, posiciones, anotaciones, la casilla del scorecard y las columnas de bateo
+const glossaryDialog = ref(false)
+const FIELDER_NAMES = ['Pitcher', 'Catcher', 'Primera base', 'Segunda base', 'Tercera base', 'Short stop', 'Jardín izquierdo', 'Jardín central', 'Jardín derecho']
+const GLOSSARY = [
+  ...RESULT_GROUPS.map(group => ({
+    title: `Jugadas: ${group.title}`,
+    entries: group.items.map(item => ({ term: item.label || item.value, meaning: item.title }))
+  })),
+  {
+    title: 'Posiciones',
+    note: 'Cada fildeador se anota con su número.',
+    entries: [
+      ...FIELDER_NAMES.map((name, index) => ({ term: String(index + 1), meaning: name })),
+      ...Object.values(GAPS).map(gap => ({ term: gap.value, meaning: `Callejón ${gap.name}` }))
+    ]
+  },
+  {
+    title: 'Anotaciones',
+    entries: [
+      { term: '1B-8', meaning: 'Hit y hacia dónde fue la bola (sencillo al jardín central)' },
+      { term: '6-3', meaning: 'Rodado: quién fildeó y a quién tiró para el out (short a primera)' },
+      { term: '3U', meaning: 'Out sin asistencia: el mismo fildeador hizo el out' },
+      { term: 'F8', meaning: 'Elevado (fly) de out al fildeador indicado' },
+      { term: 'L6', meaning: 'Línea de out al fildeador indicado' },
+      { term: '6-4-3 DP', meaning: 'Doble play con la secuencia de fildeadores' },
+      { term: 'SF8', meaning: 'Elevado de sacrificio al fildeador indicado' },
+      { term: 'SH1-3', meaning: 'Toque de sacrificio: quién lo fildeó y dónde fue el out' },
+      { term: 'FC6', meaning: 'Bola ocupada: el fildeador prefirió sacar a otro corredor' },
+      { term: 'E6', meaning: 'Error del fildeador indicado' },
+      { term: 'WP / PB', meaning: 'Wild pitch del pitcher / passed ball del catcher' },
+      { term: 'CS2-6', meaning: 'Atrapado robando: del catcher al short' },
+      { term: 'PO1-3', meaning: 'Pick-off: del pitcher a primera' }
+    ]
+  },
+  {
+    title: 'Casilla del scorecard',
+    entries: [
+      { term: '◇', meaning: 'Corrido del bateador: hasta qué base llegó (relleno verde si anotó)' },
+      { term: '¹ ² ³', meaning: 'Carreras impulsadas en el turno' },
+      { term: '× 6-4', meaning: 'Lo pusieron out en las bases y cómo' },
+      { term: 'LOB', meaning: 'Se quedó en base al terminar la entrada' },
+      { term: 'Dejó 2', meaning: 'Hizo el tercer out y dejó ese número de corredores en base' },
+      { term: '↳', meaning: 'Cambio: entró en el turno al bat del jugador de arriba' }
+    ]
+  },
+  {
+    title: 'Columnas de bateo',
+    entries: [...FULL_COLUMNS, { label: 'E', title: 'Errores a la defensiva' }].map(column => ({ term: column.label, meaning: column.title }))
+  },
+  {
+    title: 'Marcador',
+    entries: [
+      { term: 'R', meaning: 'Carreras' },
+      { term: 'H', meaning: 'Hits' },
+      { term: 'E', meaning: 'Errores' },
+      { term: 'LOB', meaning: 'Dejados en base del equipo' },
+      { term: 'X', meaning: 'El local no batea la última entrada porque ya va ganando' }
+    ]
+  }
+]
+
+// El glosario en PDF: el servidor lo arma con las mismas secciones que se ven en el diálogo
+const exportingGlossary = ref(false)
+const exportGlossary = async () => {
+  exportingGlossary.value = true
+  try {
+    await downloadFile('/glossary/pdf', 'glosario_scorecard.pdf', { title: 'Glosario del scorecard', sections: GLOSSARY })
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al generar el PDF del glosario'))
+  } finally {
+    exportingGlossary.value = false
+  }
+}
+
 const STATS = ['pa', 'ab', 'r', 'h', 'singles', 'ih', 'doubles', 'triples', 'hr', 'rbi', 'bb', 'ibb', 'hbp', 'sf', 'sh', 'roe', 'so', 'so_swinging', 'so_looking', 'lob', 'e']
 
 const dialog = computed({
@@ -917,6 +1134,36 @@ const closedInnings = ref({ away: [], home: [] })
 const turnIndex = ref(null)
 
 const game = computed(() => props.boxscore?.game)
+
+// Descarga del scorecard en PDF (team: away, home o both); usa lo guardado, no lo que se está editando
+const notify = useNotificationsStore()
+const exportingPdf = ref(false)
+const hasSavedLineup = computed(() => (game.value?.batting_lines || []).length > 0)
+const hasSavedScore = computed(() => game.value?.away_score != null && game.value?.home_score != null)
+// Bateo, Bateo detallado y Scorecard se imprimen por equipo; Score y Line Score son del partido
+const modeHasLineup = computed(() => ['batting', 'batting_full', 'scorecard'].includes(mode.value))
+const pdfUnavailable = computed(() => {
+  if (modeHasLineup.value && !hasSavedLineup.value) return 'Guarda el lineup del partido para generar su PDF'
+  if (mode.value !== 'scorecard' && !hasSavedScore.value) return 'Guarda el marcador del partido para generar su PDF'
+  return ''
+})
+// Nombre: [partido]_[visitante]_vs_[local]_[aaaa-mm-dd].pdf; las modalidades distintas del Scorecard llevan su sufijo
+const PDF_SUFFIXES = { score: '_score', linescore: '_line_score', batting: '_bateo', batting_full: '_bateo_detallado', scorecard: '' }
+const exportBoxscore = async (team) => {
+  const slug = text => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '').toLowerCase()
+  const filename = `${game.value.game_number}_${slug(game.value.away_team.name)}_vs_${slug(game.value.home_team.name)}_${String(game.value.scheduled_at).substring(0, 10)}${PDF_SUFFIXES[mode.value]}.pdf`
+  exportingPdf.value = true
+  try {
+    await downloadFile(
+      `/tournaments/${game.value.tournament_id}/games/${game.value.id}/boxscore/pdf?mode=${mode.value}&team=${team}`,
+      filename
+    )
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al generar el PDF del box score'))
+  } finally {
+    exportingPdf.value = false
+  }
+}
 const positions = computed(() => props.boxscore?.positions || [])
 const currentMode = computed(() => MODES.find(item => item.value === mode.value))
 const isBatting = computed(() => ['batting', 'batting_full', 'scorecard'].includes(mode.value))
@@ -1240,6 +1487,31 @@ const lobByPlay = computed(() => {
   return result
 })
 
+// Bateador que se quedó en turno al cerrar cada entrada (abre la siguiente): línea => entradas cerradas
+const nextUpCells = computed(() => {
+  const result = new Map()
+  for (const side of SIDES) {
+    const slots = battingSlots(side)
+    for (const turn of turnSequence(side).turns.filter(item => item.endsInning && item.inning < innings.value)) {
+      const line = batterFor(slots[(turn.slot + 1) % slots.length], turn.inning)
+      if (!result.has(line)) result.set(line, new Set())
+      result.get(line).add(turn.inning)
+    }
+  }
+  return result
+})
+
+// Entradas que ya se cerraron con tres outs, por equipo
+const closedInningsBySide = computed(() => Object.fromEntries(SIDES.map(side => [
+  side,
+  new Set(turnSequence(side).turns.filter(turn => turn.endsInning).map(turn => turn.inning))
+])))
+
+// En una entrada cerrada, la casilla de quien no bateó (ni se quedó en turno) ya no se usa
+const isUnusedCell = (side, line, inning) => closedInningsBySide.value[side].has(inning)
+  && cellPlays(line, inning).length === 0
+  && !nextUpCells.value.get(line)?.has(inning)
+
 const lineLob = line => line.plays.reduce((sum, play) => sum + (lobByPlay.value.get(play) || 0), 0)
 
 const teamLob = (side) => {
@@ -1542,6 +1814,36 @@ const handleSubmit = () => {
 </script>
 
 <style scoped>
+.glossary-title {
+  font-weight: 700;
+  color: #1f2937;
+  margin: 8px 0 4px;
+}
+
+.glossary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.glossary-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+}
+
+.glossary-term {
+  width: 80px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Instrucciones y avisos del panel de captura: texto pequeño para no competir con la cuadrícula */
+.modal-note {
+  font-size: 0.75rem !important;
+  line-height: 1.4;
+}
+
 .box-wrap {
   overflow-x: auto;
   border: 1px solid #d0d7de;
@@ -1573,6 +1875,22 @@ const handleSubmit = () => {
 .box-table th:first-child,
 .box-table td:first-child {
   padding-left: 12px;
+}
+
+/* Marcador: el nombre del equipo alineado a la izquierda */
+.box-table--score th:first-child,
+.box-table--score td:first-child {
+  text-align: left;
+}
+
+/* Marcador más compacto: los inputs heredan el tamaño (font: inherit) */
+.box-table--score {
+  font-size: 0.75rem;
+}
+
+.box-table--score td {
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
 .box-table .total {
@@ -1685,6 +2003,24 @@ const handleSubmit = () => {
 .sc-lob {
   color: #b45309;
   font-size: 0.625rem;
+}
+
+/* Casilla que no se usó en una entrada ya cerrada */
+.sc-cell.sc-cell--unused {
+  background: repeating-linear-gradient(135deg, #f1f5f9 0 4px, #e2e8f0 4px 5px) !important;
+  cursor: default;
+}
+
+/* Se quedó en turno: su turno pasa a la siguiente entrada */
+.sc-cell.sc-cell--next {
+  background: #fef3c7 !important;
+}
+
+.sc-next {
+  color: #92400e;
+  font-weight: 700;
+  font-size: 0.625rem;
+  white-space: nowrap;
 }
 
 .sc-runner-out {
@@ -1870,9 +2206,32 @@ const handleSubmit = () => {
 }
 
 .cell-field :deep(.v-field__input) {
-  min-height: 32px;
+  min-height: 30px;
   padding-top: 2px;
   padding-bottom: 2px;
+  font-size: 0.75rem;
+}
+
+/* Lineup, pestañas de equipo y panel de captura más compactos */
+.team-tabs :deep(.v-tab) {
   font-size: 0.8125rem;
+}
+
+.box-table--lineup {
+  font-size: 0.75rem;
+}
+
+.box-table--lineup .sc-cell {
+  font-size: 0.6875rem;
+  height: 36px;
+}
+
+.box-table--lineup .sc-diamond {
+  width: 12px;
+  height: 12px;
+}
+
+.play-panel :deep(.v-btn) {
+  font-size: 0.75rem;
 }
 </style>

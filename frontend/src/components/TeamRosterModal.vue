@@ -13,14 +13,14 @@
         class="align-center justify-center"
       >
         <div class="d-flex flex-column align-center">
-          <v-progress-circular indeterminate color="blue-darken-3" size="48" width="4" />
+          <v-progress-circular indeterminate color="primary" size="48" width="4" />
           <div class="mt-3 font-weight-bold text-grey-darken-3">Actualizando roster...</div>
         </div>
       </v-overlay>
 
       <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
         <div class="d-flex align-center">
-          <v-avatar v-if="team" color="blue-darken-3" size="32" class="mr-3 text-white team-abbr font-weight-bold">
+          <v-avatar v-if="team" color="brand-surface" size="32" class="mr-3 text-white team-abbr font-weight-bold">
             {{ team.abbreviation }}
           </v-avatar>
           <div>

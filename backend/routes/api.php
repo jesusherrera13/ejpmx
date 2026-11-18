@@ -16,7 +16,9 @@ use App\Http\Controllers\StandingsController;
 use App\Http\Controllers\TournamentRosterController;
 use App\Http\Controllers\TournamentTeamController;
 use App\Http\Controllers\BoxscoreController;
+use App\Http\Controllers\BoxscorePdfController;
 use App\Http\Controllers\GameController;
+use App\Http\Controllers\GlossaryPdfController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
@@ -83,6 +85,8 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
     Route::put('/tournaments/{tournament}/games/{game}', [GameController::class, 'update']);
     Route::get('/tournaments/{tournament}/games/{game}/boxscore', [BoxscoreController::class, 'show']);
     Route::put('/tournaments/{tournament}/games/{game}/boxscore', [BoxscoreController::class, 'update']);
+    Route::get('/tournaments/{tournament}/games/{game}/boxscore/pdf', BoxscorePdfController::class);
+    Route::post('/glossary/pdf', GlossaryPdfController::class);
     Route::delete('/tournaments/{tournament}/games', [GameController::class, 'destroy']);
 
      // CONTENT TYPE

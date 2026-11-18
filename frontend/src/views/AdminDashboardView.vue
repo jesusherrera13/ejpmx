@@ -58,7 +58,7 @@
       <!-- Menú de Usuario -->
       <v-menu :close-on-content-click="false" location="bottom end" transition="scale-transition">
         <template v-slot:activator="{ props }">
-          <v-avatar v-bind="props" color="orange-darken-3" class="cursor-pointer text-white font-weight-bold elevation-1" size="36">
+          <v-avatar v-bind="props" color="secondary" class="cursor-pointer text-white font-weight-bold elevation-1" size="36">
             {{ authStore.user?.initial || 'U' }}
           </v-avatar>
         </template>
@@ -238,7 +238,7 @@
           >
             <template v-slot:item.name="{ item }">
               <div class="d-flex align-center py-1">
-                <v-avatar color="blue-darken-3" size="28" class="mr-2 text-white text-caption font-weight-bold">
+                <v-avatar color="brand-surface" size="28" class="mr-2 text-white text-caption font-weight-bold">
                   {{ item.abbreviation || 'EQ' }}
                 </v-avatar>
                 <span class="font-weight-bold text-black">{{ item.name }}</span>

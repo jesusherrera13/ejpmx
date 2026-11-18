@@ -131,7 +131,7 @@ const handleContinue = async () => {
 <style scoped>
 /* Fondo oficial Azul Oscuro MLB */
 .bg-mlb-dark {
-  background-color: #041e42 !important;
+  background-color: #0B0B12 !important;
 }
 
 /* Tarjeta blanca */
@@ -174,7 +174,7 @@ const handleContinue = async () => {
 
 /* Color azul para los enlaces */
 .link-blue {
-  color: #0d5cc4;
+  color: #7B5CF5;
   font-weight: 700;
   text-decoration: none;
 }
@@ -199,7 +199,7 @@ const handleContinue = async () => {
   top: 0;
   width: 50%;
   height: 100%;
-  background-color: #041e42;
+  background-color: #7B5CF5;
 }
 .red-side {
   position: absolute;
@@ -207,7 +207,7 @@ const handleContinue = async () => {
   top: 0;
   width: 50%;
   height: 100%;
-  background-color: #bf0d3e;
+  background-color: #E052C8;
 }
 .baseball-icon {
   position: relative;
@@ -231,7 +231,7 @@ const handleContinue = async () => {
 
 /* Botón Continuar */
 .btn-continue {
-  background-color: #060a0d !important;
+  background-color: #161624 !important;
   color: #fff !important;
   font-size: 1rem;
   font-weight: 700;

@@ -25,6 +25,12 @@
     </v-app-bar>
 
     <v-main>
+      <!-- Carga inicial del torneo, sus equipos y su calendario: cubre el contenido sin transición -->
+      <div v-if="initialLoading" class="page-loader">
+        <v-progress-circular indeterminate color="primary" size="48" width="4" />
+        <div class="mt-3 font-weight-bold text-grey-darken-3">Cargando torneo...</div>
+      </div>
+
       <v-container class="pa-6" fluid>
 
         <!-- Encabezado: Torneos / Nombre -->
@@ -95,7 +101,7 @@
 
               <template v-else>
                 <div v-for="team in teamsStore.teams" :key="team.id" class="gh-row">
-                  <v-avatar color="blue-darken-3" size="24" class="mr-3 text-white team-abbr font-weight-bold">
+                  <v-avatar color="brand-surface" size="24" class="mr-3 text-white team-abbr font-weight-bold">
                     {{ team.abbreviation }}
                   </v-avatar>
                   <span class="gh-row__name font-weight-bold text-black">{{ team.name }}</span>
@@ -179,7 +185,7 @@
               >
                 <template v-slot:item.team_name="{ item }">
                   <div class="d-flex align-center">
-                    <v-avatar color="blue-darken-3" size="22" class="mr-2 text-white team-abbr font-weight-bold">
+                    <v-avatar color="brand-surface" size="22" class="mr-2 text-white team-abbr font-weight-bold">
                       {{ item.team_abbreviation }}
                     </v-avatar>
                     {{ item.team_name }}
@@ -187,9 +193,6 @@
                 </template>
                 <template v-slot:item.full_name="{ item }">
                   <span class="font-weight-bold text-black">{{ item.full_name }}</span>
-                </template>
-                <template v-slot:item.birthdate="{ item }">
-                  {{ item.birthdate ? formatDate(item.birthdate) : '—' }}
                 </template>
               </v-data-table>
             </div>
@@ -358,7 +361,7 @@
                 <v-list v-else density="compact" class="py-0 team-picker-list">
                   <v-list-item v-for="team in selectedTeams" :key="team.id" @click="unselectTeam(team)">
                     <template #prepend>
-                      <v-avatar color="blue-darken-3" size="24" class="mr-2 text-white team-abbr font-weight-bold">
+                      <v-avatar color="brand-surface" size="24" class="mr-2 text-white team-abbr font-weight-bold">
                         {{ team.abbreviation || 'EQ' }}
                       </v-avatar>
                     </template>
@@ -417,7 +420,7 @@
                   <v-list-item v-for="team in remainingTeams" :key="team.id" @click="selectTeam(team)">
                     <template #prepend>
                       <v-icon icon="mdi-chevron-left" size="small" color="success" class="mr-1" />
-                      <v-avatar color="blue-darken-3" size="24" class="mr-2 text-white team-abbr font-weight-bold">
+                      <v-avatar color="brand-surface" size="24" class="mr-2 text-white team-abbr font-weight-bold">
                         {{ team.abbreviation || 'EQ' }}
                       </v-avatar>
                     </template>
@@ -528,6 +531,7 @@ const notify = useNotificationsStore()
 
 const tournament = ref(null)
 const tab = ref('equipos')
+const initialLoading = ref(true)
 const hasCalendar = computed(() => gamesStore.games.length > 0)
 
 // ---------- EQUIPOS ----------
@@ -711,10 +715,9 @@ const playerSearch = ref('')
 const isExportingPlayers = ref(false)
 
 const playerHeaders = [
-  { title: 'Equipo', key: 'team_name' },
   { title: 'Jugador', key: 'full_name' },
   { title: 'CURP', key: 'curp' },
-  { title: 'Nacimiento', key: 'birthdate' }
+  { title: 'Equipo', key: 'team_name' }
 ]
 
 // Búsqueda indistinta a acentos y mayúsculas en cada columna
@@ -862,16 +865,33 @@ onMounted(async () => {
     options.value.games_per_series = tournament.value.games_per_series ?? 3
   } catch (error) {
     notify.error(getErrorMessage(error, 'No se encontró el torneo'))
+    initialLoading.value = false
     return
   }
 
-  await Promise.all([teamsStore.fetchTeams(props.id), gamesStore.fetchGames(props.id)])
+  try {
+    await Promise.all([teamsStore.fetchTeams(props.id), gamesStore.fetchGames(props.id)])
+  } finally {
+    initialLoading.value = false
+  }
   syncOptionsFromGames()
   watchOptions()
 })
 </script>
 
 <style scoped>
+/* Debajo de la barra superior (64px), sobre el contenido */
+.page-loader {
+  position: fixed;
+  inset: 64px 0 0 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(248, 250, 252, 0.94);
+}
+
 .bg-admin-grey {
   background-color: #f8fafc !important;
 }
