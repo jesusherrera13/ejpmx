@@ -1,8 +1,8 @@
 <template>
   <v-app class="bg-mlb-dark">
     <v-container class="fill-height d-flex align-center justify-center" fluid>
-      <!-- theme="light": la tarjeta siempre es blanca aunque el sistema esté en modo oscuro -->
-      <v-card theme="light" color="white" width="100%" max-width="390" class="login-card rounded-lg" flat>
+      <!-- theme="ejp": la tarjeta siempre es blanca aunque el sistema esté en modo oscuro -->
+      <v-card theme="ejp" color="white" width="100%" max-width="390" class="login-card rounded-lg" flat>
 
         <!-- Logo de la MLB -->
         <div class="d-flex justify-center mb-10">
@@ -131,7 +131,7 @@ const handleContinue = async () => {
 <style scoped>
 /* Fondo oficial Azul Oscuro MLB */
 .bg-mlb-dark {
-  background-color: #0B0B12 !important;
+  background-color: #1E56B8 !important;
 }
 
 /* Tarjeta blanca */

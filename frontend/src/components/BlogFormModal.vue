@@ -1,17 +1,23 @@
 <template>
-  <v-dialog v-model="dialog" max-width="800px" persistent>
-    <v-card class="rounded-xl pa-2" theme="light">
-      <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
-        <span class="text-h6 font-weight-black text-grey-darken-4">
-          {{ isEditing ? 'Editar Publicación' : 'Nueva Publicación' }}
-        </span>
-        <v-btn icon="mdi-close" variant="text" density="comfortable" @click="closeModal" />
+  <v-dialog v-model="dialog" max-width="960px" persistent scrollable>
+    <v-card class="rounded-xl blog-modal" theme="ejp">
+      <!-- Encabezado fijo -->
+      <v-card-title class="d-flex align-center justify-space-between pt-4 pb-3 px-6">
+        <div class="d-flex align-center">
+          <v-avatar color="primary" variant="tonal" size="36" class="mr-3">
+            <v-icon :icon="isVideo ? 'mdi-video-outline' : 'mdi-newspaper-variant-outline'" size="20" />
+          </v-avatar>
+          <span class="text-h6 font-weight-black text-grey-darken-4">
+            {{ isEditing ? 'Editar publicación' : 'Nueva publicación' }}
+          </span>
+        </div>
+        <v-btn icon="mdi-close" variant="text" density="comfortable" :disabled="loading" @click="closeModal" />
       </v-card-title>
 
-      <v-divider class="my-2" />
+      <v-divider />
 
-      <v-card-text class="pt-2">
-        <!-- NUEVO: Alerta de errores del servidor -->
+      <!-- Cuerpo con scroll; encabezado y botones quedan siempre visibles -->
+      <v-card-text class="px-6 py-5">
         <v-alert
           v-if="serverError"
           type="error"
@@ -23,136 +29,136 @@
         >
           {{ serverError }}
         </v-alert>
-        <v-form ref="formRef" v-model="isFormValid" @submit.prevent="handleSubmit">
-          <v-container class="pa-0">
-            <v-row density="comfortable">
 
-              <v-col cols="12" md="8">
-                <v-text-field
-                  v-model="formData.title"
-                  label="Título de la publicación"
-                  variant="outlined"
-                  density="comfortable"
-                  class="rounded-lg"
-                  :rules="[v => !!v || 'El título es requerido']"
-                />
-              </v-col>
+        <!-- Primero los tipos de publicación: de ellos dependen el campo de tipo, la portada y el video -->
+        <div v-if="!typesReady" class="d-flex flex-column align-center justify-center py-16 text-grey-darken-1">
+          <template v-if="contentTypesStore.error">
+            <v-icon icon="mdi-alert-circle-outline" color="error" size="36" class="mb-2" />
+            <div class="text-body-2 mb-3">{{ contentTypesStore.error }}</div>
+            <v-btn variant="outlined" color="primary" class="text-none rounded-pill" @click="loadContentTypes">Reintentar</v-btn>
+          </template>
+          <template v-else>
+            <v-progress-circular indeterminate color="primary" size="40" class="mb-3" />
+            <div class="text-body-2">Cargando tipos de publicación…</div>
+          </template>
+        </div>
 
-              <v-col cols="12" md="4" class="d-flex align-center">
-                <v-switch
-                  v-model="formData.is_published"
-                  label="Publicar inmediatamente"
-                  color="success"
-                  hide-details
-                  density="compact"
-                />
-              </v-col>
+        <v-form v-else ref="formRef" @submit.prevent="handleSubmit">
+          <v-text-field
+            v-model="formData.title"
+            label="Título de la publicación"
+            placeholder="Cinco interrogantes rumbo a la fecha límite de cambios"
+            variant="outlined"
+            density="comfortable"
+            class="mb-2"
+            counter="200"
+            maxlength="200"
+            :rules="TITLE_RULES"
+          />
 
-              <v-col cols="12">
-                <v-select
-                  v-model="formData.content_type_id"
-                  :items="contentTypesStore.contentTypes" 
-                  item-title="name"
-                  item-value="id"
-                  label="Tipo de Publicación"
-                  variant="outlined"
-                  density="comfortable"
-                  class="rounded-lg"
-                  :rules="[v => !!v || 'Selecciona un tipo']"
-                />
-              </v-col>
-
-              <!-- NUEVO: Renderizado Condicional para Artículo (Imagen) -->
-              <v-col cols="12" v-if="isArticle">
-                <v-file-input
-                  v-model="imageFile"
-                  accept="image/png, image/jpeg, image/webp"
-                  label="Imagen de portada (Opcional)"
-                  variant="outlined"
-                  density="comfortable"
-                  class="rounded-lg"
-                  prepend-inner-icon="mdi-camera"
-                  show-size
-                  @update:model-value="handleImageChange"
-                  @click:clear="clearImage"
-                />
-                <v-expand-transition>
-                  <div v-if="imagePreview" class="mt-2 text-center">
-                    <p class="text-caption text-grey-darken-1 mb-1 text-left">Vista previa:</p>
-                    <v-img :src="imagePreview" max-height="250" class="rounded-lg border bg-grey-lighten-4" cover />
+          <v-row dense class="mb-1">
+            <v-col cols="12" sm="7">
+              <v-select
+                v-model="formData.content_type_id"
+                :items="contentTypesStore.contentTypes"
+                item-title="name"
+                item-value="id"
+                label="Tipo de publicación"
+                variant="outlined"
+                density="comfortable"
+                :rules="TYPE_RULES"
+              />
+            </v-col>
+            <v-col cols="12" sm="5" class="d-flex align-start">
+              <v-sheet border rounded="lg" class="d-flex align-center justify-space-between w-100 px-4 publish-box">
+                <div>
+                  <div class="text-body-2 font-weight-bold">Publicar</div>
+                  <div class="text-caption text-grey-darken-1">
+                    {{ formData.is_published ? 'Visible en el portal al guardar' : 'Se guarda como borrador' }}
                   </div>
-                </v-expand-transition>
-              </v-col>
-
-              <!-- NUEVO: Renderizado Condicional para Video (URL) -->
-              <v-col cols="12" v-if="isVideo">
-                <v-text-field
-                  v-model="formData.video_url"
-                  label="URL del Video (YouTube, Vimeo, etc.)"
-                  variant="outlined"
-                  density="comfortable"
-                  class="rounded-lg"
-                  prepend-inner-icon="mdi-video"
-                  :rules="[v => !!v || 'La URL del video es requerida']"
-                />
-                <!-- Vista previa de Video simple (Iframe) -->
-                <v-expand-transition>
-                  <div v-if="embedUrl" class="mt-2 text-center">
-                    <p class="text-caption text-grey-darken-1 mb-1 text-left">Vista previa del video:</p>
-                    <iframe 
-                      :src="embedUrl" 
-                      width="100%" 
-                      height="315" 
-                      frameborder="0" 
-                      class="rounded-lg border"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                      allowfullscreen>
-                    </iframe>
-                  </div>
-                </v-expand-transition>
-              </v-col>
-
-              <!-- Contenido (Editor Tiptap) -->
-              <v-col cols="12">
-                <p class="text-subtitle-2 mb-2 text-grey-darken-2">Contenido</p>
-                <div :class="['editor-container', { 'border-error': contentError }]">
-                  <div v-if="editor" class="editor-toolbar bg-grey-lighten-4 px-2 py-1 d-flex flex-wrap ga-1 border-b">
-                    <!-- Botones de Tiptap (Mantenidos igual) -->
-                    <v-btn icon="mdi-format-bold" size="small" variant="text" :color="editor.isActive('bold') ? 'primary' : 'grey-darken-2'" @click="editor.chain().focus().toggleBold().run()" />
-                    <v-btn icon="mdi-format-italic" size="small" variant="text" :color="editor.isActive('italic') ? 'primary' : 'grey-darken-2'" @click="editor.chain().focus().toggleItalic().run()" />
-                    <v-btn icon="mdi-format-strikethrough" size="small" variant="text" :color="editor.isActive('strike') ? 'primary' : 'grey-darken-2'" @click="editor.chain().focus().toggleStrike().run()" />
-                    <v-divider vertical class="mx-1 my-2" />
-                    <v-btn icon="mdi-format-header-1" size="small" variant="text" :color="editor.isActive('heading', { level: 1 }) ? 'primary' : 'grey-darken-2'" @click="editor.chain().focus().toggleHeading({ level: 1 }).run()" />
-                    <v-btn icon="mdi-format-header-2" size="small" variant="text" :color="editor.isActive('heading', { level: 2 }) ? 'primary' : 'grey-darken-2'" @click="editor.chain().focus().toggleHeading({ level: 2 }).run()" />
-                    <v-divider vertical class="mx-1 my-2" />
-                    <v-btn icon="mdi-format-list-bulleted" size="small" variant="text" :color="editor.isActive('bulletList') ? 'primary' : 'grey-darken-2'" @click="editor.chain().focus().toggleBulletList().run()" />
-                    <v-btn icon="mdi-format-list-numbered" size="small" variant="text" :color="editor.isActive('orderedList') ? 'primary' : 'grey-darken-2'" @click="editor.chain().focus().toggleOrderedList().run()" />
-                    <v-divider vertical class="mx-1 my-2" />
-                    <v-btn icon="mdi-format-clear" size="small" variant="text" color="grey-darken-2" @click="editor.chain().focus().clearNodes().unsetAllMarks().run()" />
-                  </div>
-                  <editor-content :editor="editor" class="editor-content-area pa-3" />
                 </div>
-                <div v-if="contentError" class="text-caption text-error mt-1">El contenido es requerido.</div>
-              </v-col>
+                <v-switch v-model="formData.is_published" color="primary" hide-details density="compact" inset />
+              </v-sheet>
+            </v-col>
+          </v-row>
 
-            </v-row>
-          </v-container>
+          <!-- Artículo: imagen de portada -->
+          <div v-if="isArticle" class="mb-4">
+            <v-file-input
+              v-model="imageFile"
+              accept="image/png, image/jpeg, image/webp"
+              label="Imagen de portada (opcional)"
+              variant="outlined"
+              density="comfortable"
+              prepend-icon=""
+              prepend-inner-icon="mdi-image-outline"
+              show-size
+              hint="JPG, PNG o WebP de hasta 10 MB. Se optimiza automáticamente al guardar."
+              persistent-hint
+              :rules="IMAGE_RULES"
+              @update:model-value="handleImageChange"
+              @click:clear="clearImage"
+            />
+            <v-img
+              v-if="imagePreview"
+              :src="imagePreview"
+              height="180"
+              cover
+              class="rounded-lg border mt-3 bg-grey-lighten-4"
+            />
+          </div>
+
+          <!-- Video: URL y vista previa -->
+          <div v-if="isVideo" class="mb-4">
+            <v-text-field
+              v-model.lazy="formData.video_url"
+              label="URL del video (YouTube, Vimeo, etc.)"
+              placeholder="https://www.youtube.com/watch?v=..."
+              variant="outlined"
+              density="comfortable"
+              prepend-inner-icon="mdi-video-outline"
+              :rules="VIDEO_RULES"
+            />
+            <iframe
+              v-if="embedUrl"
+              :src="embedUrl"
+              width="100%"
+              height="315"
+              frameborder="0"
+              class="rounded-lg border"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen
+            />
+          </div>
+
+          <div class="text-subtitle-2 font-weight-bold text-grey-darken-3 mb-2">Contenido</div>
+          <RichTextEditor
+            ref="editorRef"
+            v-model="formData.content"
+            :error="contentError"
+            placeholder="Escribe el contenido de la publicación…"
+            @update:model-value="onContentChange"
+          />
+          <div v-if="contentError" class="text-caption text-error mt-1">El contenido es requerido.</div>
         </v-form>
       </v-card-text>
 
-      <v-card-actions class="pa-4 pt-0 justify-end ga-2">
-        <v-btn variant="outlined" color="grey-darken-1" class="text-capitalize rounded-pill px-5" @click="closeModal" :disabled="loading">Cancelar</v-btn>
-        <v-btn color="black" variant="flat" class="text-capitalize rounded-pill px-5 font-weight-bold" :loading="loading" @click="handleSubmit">{{ isEditing ? 'Guardar Cambios' : 'Crear Publicación' }}</v-btn>
+      <v-divider />
+
+      <v-card-actions class="px-6 py-4 justify-end ga-2">
+        <v-btn variant="outlined" color="grey-darken-1" class="text-none rounded-pill px-5" :disabled="loading" @click="closeModal">Cancelar</v-btn>
+        <v-btn color="primary" variant="flat" class="text-none rounded-pill px-5 font-weight-bold" :loading="loading" :disabled="!typesReady" @click="handleSubmit">
+          {{ isEditing ? 'Guardar cambios' : (formData.is_published ? 'Publicar' : 'Guardar borrador') }}
+        </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { useEditor, EditorContent } from '@tiptap/vue-3'
-import StarterKit from '@tiptap/starter-kit'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useContentTypesStore } from '@/stores/content_types'
+import RichTextEditor from '@/components/RichTextEditor.vue'
 
 const contentTypesStore = useContentTypesStore()
 
@@ -164,11 +170,29 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'save'])
 
+// Reglas fuera del render: si se crean en el template, cada render las cambia y revalida los campos
+const TITLE_RULES = [v => !!v?.trim() || 'El título es requerido']
+const TYPE_RULES = [v => !!v || 'Selecciona un tipo']
+const VIDEO_RULES = [v => !!v?.trim() || 'La URL del video es requerida']
+
+// Portada: mismo límite y tipos que valida el backend (BlogController)
+const MAX_IMAGE_MB = 10
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const firstFile = (value) => (Array.isArray(value) ? value[0] : value) || null
+const imageError = (file) => {
+  if (!file) return null
+  if (!IMAGE_TYPES.includes(file.type)) return 'Solo se permiten imágenes JPG, PNG o WebP'
+  if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+    return `La imagen pesa ${(file.size / 1024 / 1024).toFixed(1)} MB; el máximo es ${MAX_IMAGE_MB} MB`
+  }
+  return null
+}
+const IMAGE_RULES = [v => imageError(firstFile(v)) || true]
+
 const formRef = ref(null)
-const isFormValid = ref(false)
+const editorRef = ref(null)
 const contentError = ref(false)
 
-// Nuevas variables para la gestión de archivos
 const imageFile = ref(null)
 const imagePreview = ref(null)
 
@@ -178,32 +202,30 @@ const defaultForm = {
   id: null,
   title: '',
   content: '',
-  image: null, // Ahora guardará el objeto File
-  video_url: '', // NUEVO
-  content_type_id: null, // NUEVO
+  image: null, // Objeto File de la portada
+  video_url: '',
+  content_type_id: null,
   is_published: false
 }
 
 const formData = ref({ ...defaultForm })
 
 const selectedContentType = computed(() => {
-  return contentTypesStore.contentTypes.find(t => t.id === formData.value.content_type_id)
+  return contentTypesStore.contentTypes.find(t => Number(t.id) === Number(formData.value.content_type_id))
 })
 
 const isArticle = computed(() => selectedContentType.value?.slug === 'article')
 const isVideo = computed(() => selectedContentType.value?.slug === 'video')
 
-// Convertir URL normal a Embed para vista previa (Ejemplo con YouTube)
+// URL de YouTube a formato embed para la vista previa
 const embedUrl = computed(() => {
   const url = formData.value.video_url
   if (!url) return null
-  
-  // Transformación básica para YouTube
   const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/)
   if (ytMatch && ytMatch[1]) {
     return `https://www.youtube.com/embed/${ytMatch[1]}`
   }
-  return url // Fallback directo si es otro origen ya preparado
+  return url
 })
 
 const isEditing = computed(() => !!formData.value.id)
@@ -213,66 +235,68 @@ const dialog = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
-const editor = useEditor({
-  extensions: [StarterKit],
-  // Inicializamos con el valor actual, no solo con el default
-  content: formData.value.content, 
-  onUpdate: ({ editor }) => {
-    formData.value.content = editor.getHTML()
-    const plainText = editor.getText().trim()
-    if (plainText.length > 0) contentError.value = false
-  }
-})
+const onContentChange = (html) => {
+  if (contentError.value && html) contentError.value = false
+}
 
 onBeforeUnmount(() => {
-  if (editor.value) editor.value.destroy()
-  // Limpiar memoria de la URL temporal
   if (imagePreview.value && imagePreview.value.startsWith('blob:')) {
     URL.revokeObjectURL(imagePreview.value)
   }
 })
 
-const loadModuleData = async (tabId) => {
+// El formulario (y el contenido del editor) se muestra hasta tener los tipos de publicación
+const typesReady = ref(contentTypesStore.contentTypes.length > 0)
+
+const loadContentTypes = async () => {
   await contentTypesStore.fetchContentTypes()
+  typesReady.value = !contentTypesStore.error
 }
 
 onMounted(() => {
-  loadModuleData()
+  if (!typesReady.value) loadContentTypes()
 })
 
 watch(
   () => props.blogData,
-  async (newBlog) => {
+  (newBlog) => {
     if (newBlog && Object.keys(newBlog).length > 0) {
-      formData.value = { ...newBlog, image: null }
+      formData.value = {
+        ...defaultForm,
+        ...newBlog,
+        image: null,
+        content_type_id: newBlog.content_type_id == null ? null : Number(newBlog.content_type_id),
+      }
       imagePreview.value = newBlog.image_url || null
-      imageFile.value = null
-      serverError.value = null
     } else {
       formData.value = { ...defaultForm }
       imagePreview.value = null
-      imageFile.value = null
     }
-    
-    // Esperamos un tick del framework antes de intentar inyectar el contenido
-    await nextTick()
-    if (editor.value) {
-      // Usamos el contenido recién asignado a formData
-      editor.value.commands.setContent(formData.value.content || '')
-    }
+    imageFile.value = null
+    serverError.value = null
     contentError.value = false
   },
-  { immediate: true, deep: true }
+  { immediate: true }
 )
 
-// Generar vista previa cuando se selecciona una imagen
+// Vista previa al elegir una imagen
 const handleImageChange = (file) => {
-  // Vuetify 3 a veces retorna un arreglo incluso sin el prop 'multiple'
-  const selectedFile = Array.isArray(file) ? file[0] : file
+  // Vuetify a veces regresa un arreglo aunque no sea 'multiple'
+  const selectedFile = firstFile(file)
+
+  // Si no cumple, se deja en el campo para que se vea el error, pero no se envía ni se previsualiza
+  if (selectedFile && imageError(selectedFile)) {
+    formData.value.image = null
+    if (imagePreview.value && imagePreview.value.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreview.value)
+    }
+    imagePreview.value = isEditing.value ? props.blogData?.image_url || null : null
+    return
+  }
 
   if (selectedFile) {
     if (imagePreview.value && imagePreview.value.startsWith('blob:')) {
-      URL.revokeObjectURL(imagePreview.value) // Limpiar URL anterior
+      URL.revokeObjectURL(imagePreview.value)
     }
     imagePreview.value = URL.createObjectURL(selectedFile)
     formData.value.image = selectedFile
@@ -284,8 +308,7 @@ const handleImageChange = (file) => {
 const clearImage = () => {
   imageFile.value = null
   formData.value.image = null
-  // Corregido: Usar image_url
-  imagePreview.value = isEditing.value ? props.blogData.image_url : null 
+  imagePreview.value = isEditing.value ? props.blogData?.image_url || null : null
 }
 
 const closeModal = () => {
@@ -293,66 +316,37 @@ const closeModal = () => {
   formData.value = { ...defaultForm }
   clearImage()
   contentError.value = false
-  if (editor.value) editor.value.commands.setContent('')
   if (formRef.value) formRef.value.resetValidation()
 }
 
 const handleSubmit = async () => {
+  if (!formRef.value) return
   const { valid } = await formRef.value.validate()
-  const plainText = editor.value ? editor.value.getText().trim() : ''
-  contentError.value = plainText.length === 0
+  // El editor emite con un retraso corto; se toma el HTML al momento
+  if (editorRef.value) formData.value.content = editorRef.value.getHTML()
+  contentError.value = editorRef.value ? editorRef.value.isEmpty() : !formData.value.content
 
   if (!valid || contentError.value) return
 
-  serverError.value = null // Reiniciar antes de enviar
+  serverError.value = null
   const payload = { ...formData.value }
-  
-  emit('save', { 
-    data: payload, 
-    isEditing: isEditing.value, 
+
+  emit('save', {
+    data: payload,
+    isEditing: isEditing.value,
     closeModal,
-    onError: (msg) => { serverError.value = msg } // Función que recibirá el error
+    onError: (msg) => { serverError.value = msg }
   })
 }
 </script>
 
 <style scoped>
-.editor-container {
-  border: 1px solid #9e9e9e;
-  border-radius: 8px;
-  overflow: hidden;
-  transition: border-color 0.3s;
+.blog-modal {
+  max-height: 92vh;
 }
-.editor-container:hover {
-  border-color: #212121;
-}
-.editor-container.border-error {
-  border-color: rgb(var(--v-theme-error));
-}
-.editor-content-area {
-  min-height: 250px;
-  max-height: 400px;
-  overflow-y: auto;
-  cursor: text;
-}
-.editor-content-area :deep(.tiptap) { outline: none; }
-.editor-content-area :deep(.tiptap p) { margin-bottom: 0.5rem; }
-.editor-content-area :deep(.tiptap h1),
-.editor-content-area :deep(.tiptap h2),
-.editor-content-area :deep(.tiptap h3) {
-  margin-top: 1rem;
-  margin-bottom: 0.5rem;
-  line-height: 1.2;
-}
-.editor-content-area :deep(.tiptap ul),
-.editor-content-area :deep(.tiptap ol) {
-  padding-left: 1.5rem;
-  margin-bottom: 0.5rem;
-}
-.editor-content-area :deep(.tiptap blockquote) {
-  border-left: 3px solid #e0e0e0;
-  padding-left: 1rem;
-  color: #616161;
-  font-style: italic;
+.publish-box {
+  min-height: 48px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 </style>

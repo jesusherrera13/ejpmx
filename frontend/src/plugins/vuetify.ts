@@ -28,7 +28,7 @@ export default createVuetify({
           'brand-surface': '#161624',
           'brand-magenta': '#E052C8',
           'brand-violet': '#7B5CF5',
-          'brand-blue': '#3B8BF0',
+          'brand-blue': '#1E56B8',
         },
       },
     },

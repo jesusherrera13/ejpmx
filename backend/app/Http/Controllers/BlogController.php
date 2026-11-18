@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Blog;
+use App\Services\ImageOptimizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
@@ -15,13 +16,13 @@ class BlogController extends Controller
         return response()->json($blogs);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, ImageOptimizer $optimizer)
     {
         $validated = $request->validate([
             'content_type_id' => 'required|exists:content_types,id',
             'title' => 'required|string|max:255',
             'content' => 'nullable|string',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:10240', // hasta 10 MB; se optimiza al guardar
             'video_url' => 'nullable|url',
             'is_published' => 'boolean',
             'media_url' => 'nullable|url|max:500',
@@ -30,16 +31,17 @@ class BlogController extends Controller
         $validated['slug'] = Str::slug($validated['title']);
         $validated['is_published'] = $request->boolean('is_published');
 
-        // Procesar y guardar el archivo si existe
+        // Guardar la portada reducida (WebP, máx. 1600 px)
         if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('blogs', 'public');
+            $validated['image'] = $optimizer->store($request->file('image'), 'blogs');
         }
 
         $blog = Blog::create($validated);
 
         return response()->json([
             'message' => 'Publicación creada exitosamente',
-            'data' => $blog
+            // fresh(): incluye el tipo de publicación (contentType) para que el panel la muestre bien
+            'data' => $blog->fresh()
         ], 201);
     }
 
@@ -48,13 +50,14 @@ class BlogController extends Controller
         return response()->json($blog);
     }
 
-    public function update(Request $request, Blog $blog)
+    public function update(Request $request, Blog $blog, ImageOptimizer $optimizer)
     {
         $validated = $request->validate([
         'content_type_id' => 'sometimes|required|exists:content_types,id',
         'title' => 'sometimes|required|string|max:255',
         'content' => 'nullable|string',
-        'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+        'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:10240', // hasta 10 MB; se optimiza al guardar
+        'video_url' => 'nullable|url',
         'is_published' => 'boolean',
         'media_url' => 'nullable|url|max:500',
     ]);
@@ -71,14 +74,14 @@ class BlogController extends Controller
             if ($blog->image) {
                 Storage::disk('public')->delete($blog->image);
             }
-            $validated['image'] = $request->file('image')->store('blogs', 'public');
+            $validated['image'] = $optimizer->store($request->file('image'), 'blogs');
         }
 
         $blog->update($validated);
 
         return response()->json([
             'message' => 'Publicación actualizada exitosamente',
-            'data' => $blog
+            'data' => $blog->fresh()
         ], 200);
     }
 

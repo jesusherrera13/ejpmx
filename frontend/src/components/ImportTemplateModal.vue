@@ -2,7 +2,7 @@
 <!-- Modal genérico para cargar una plantilla de Excel (equipos, jugadores, ...) -->
 <template>
   <v-dialog v-model="dialog" max-width="800px" persistent>
-    <v-card class="rounded-xl pa-2" theme="light">
+    <v-card class="rounded-xl pa-2" theme="ejp">
       <!-- Header -->
       <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
         <span class="text-h6 font-weight-black text-grey-darken-4">
@@ -95,7 +95,7 @@
 
     <!-- Vista previa: qué pasará con cada fila antes de guardar -->
     <v-dialog v-model="showPreview" max-width="1200px" persistent scrollable>
-      <v-card class="rounded-xl pa-2" theme="light">
+      <v-card class="rounded-xl pa-2" theme="ejp">
         <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
           <div>
             <div class="text-h6 font-weight-black text-grey-darken-4">Vista previa</div>

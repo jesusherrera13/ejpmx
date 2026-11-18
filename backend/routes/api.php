@@ -6,6 +6,10 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\BlogController;
+use App\Http\Controllers\PublicBlogController;
+use App\Http\Controllers\PublicAdvertisingController;
+use App\Http\Controllers\SponsorController;
+use App\Http\Controllers\AdvertisingController;
 use App\Http\Controllers\ContentTypeController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\PlayerController;
@@ -23,6 +27,11 @@ use App\Http\Controllers\GlossaryPdfController;
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 
+// Portal público: artículos y videos publicados
+Route::get('/public/blogs', [PublicBlogController::class, 'index']);
+Route::get('/public/blogs/{blog}', [PublicBlogController::class, 'show']);
+Route::get('/public/advertising', [PublicAdvertisingController::class, 'index']);
+
 Route::group(['middleware' => ['auth:sanctum']], function() {
 
     // AUTH
@@ -36,6 +45,8 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
 
     // BLOG
     Route::apiResource('/blog', BlogController::class);
+    Route::apiResource('/sponsors', SponsorController::class);
+    Route::apiResource('/advertising', AdvertisingController::class);
 
     // TEAM
     Route::get('/teams/template', [TeamController::class, 'template']);

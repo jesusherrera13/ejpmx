@@ -2,56 +2,17 @@
   <v-app class="bg-admin-grey">
     
     <!-- 1. BARRA SUPERIOR DEL PANEL -->
-    <v-app-bar flat color="white" class="border-bottom px-4" height="64">
-      <div class="font-weight-black text-grey-darken-4 text-h6 d-flex align-center flex-shrink-0 mr-6">
-        <v-icon icon="mdi-shield-crown" color="primary" class="mr-2" size="26" />
-        Panel de Administración
+    <v-app-bar flat color="brand-blue" class="px-2 px-md-4" height="64">
+      <v-app-bar-nav-icon color="white" aria-label="Menú" @click="toggleDrawer" />
+      <div class="font-weight-black text-white text-h6 d-flex align-center flex-shrink-0 ml-1">
+        <v-icon icon="mdi-shield-crown" color="white" class="mr-2" size="26" />
+        <span class="d-none d-sm-inline">Panel de Administración</span>
       </div>
-
-      <!-- Navegación de módulos en el encabezado -->
-      <nav class="d-none d-md-flex align-center fill-height">
-        <a
-          v-for="item in filteredMenuItems"
-          :key="item.id"
-          href="#"
-          class="module-link"
-          :class="{ 'module-link--active': activeTab === item.id }"
-          @click.prevent="activeTab = item.id"
-        >
-          {{ item.title }}
-        </a>
-      </nav>
 
       <v-spacer></v-spacer>
 
-      <!-- Navegación de módulos en pantallas pequeñas -->
-      <v-menu location="bottom end">
-        <template v-slot:activator="{ props }">
-          <v-btn
-            v-bind="props"
-            variant="text"
-            size="small"
-            class="d-md-none text-capitalize font-weight-bold text-grey-darken-3 mr-2"
-            append-icon="mdi-chevron-down"
-          >
-            {{ currentModule.title }}
-          </v-btn>
-        </template>
-        <v-list density="compact" min-width="200" class="rounded-lg">
-          <v-list-item
-            v-for="item in filteredMenuItems"
-            :key="item.id"
-            :prepend-icon="item.icon"
-            :title="item.title"
-            :active="activeTab === item.id"
-            color="primary"
-            @click="activeTab = item.id"
-          />
-        </v-list>
-      </v-menu>
-
       <!-- Botón de regreso al sitio público -->
-      <v-btn to="/" variant="text" size="small" class="text-capitalize font-weight-bold text-grey-darken-2 mr-2" prepend-icon="mdi-arrow-left">
+      <v-btn to="/" variant="text" size="small" class="text-capitalize font-weight-bold text-white mr-2" prepend-icon="mdi-arrow-left">
         Volver al Sitio
       </v-btn>
 
@@ -76,6 +37,49 @@
         </v-card>
       </v-menu>
     </v-app-bar>
+
+    <!-- MENÚ LATERAL DE MÓDULOS (fijo en escritorio, desplegable en pantallas chicas) -->
+    <v-navigation-drawer
+      v-model="drawer"
+      :rail="rail && !mobile"
+      :temporary="mobile"
+      :permanent="!mobile"
+      width="256"
+      class="admin-drawer"
+    >
+      <v-list density="compact" nav class="py-3">
+        <template v-for="group in menuGroups" :key="group.title">
+          <v-list-subheader v-if="!rail || mobile" class="text-uppercase text-caption font-weight-bold">
+            {{ group.title }}
+          </v-list-subheader>
+          <v-divider v-else class="my-2" />
+          <v-list-item
+            v-for="item in group.items"
+            :key="item.id"
+            :prepend-icon="item.icon"
+            :title="item.title"
+            :active="activeTab === item.id"
+            color="primary"
+            rounded="lg"
+            class="mb-1"
+            @click="selectModule(item.id)"
+          >
+            <v-tooltip v-if="rail && !mobile" activator="parent" location="end">{{ item.title }}</v-tooltip>
+          </v-list-item>
+        </template>
+      </v-list>
+      <template v-if="!mobile" v-slot:append>
+        <v-divider />
+        <v-list density="compact" nav>
+          <v-list-item
+            :prepend-icon="rail ? 'mdi-chevron-double-right' : 'mdi-chevron-double-left'"
+            :title="rail ? '' : 'Contraer menú'"
+            rounded="lg"
+            @click="rail = !rail"
+          />
+        </v-list>
+      </template>
+    </v-navigation-drawer>
 
     <!-- 2. ÁREA DE CONTENIDO PRINCIPAL -->
     <v-main>
@@ -131,7 +135,7 @@
             <template v-slot:activator="{ props }">
               <v-btn
                 v-bind="props"
-                color="black"
+                color="primary"
                 size="small"
                 class="text-capitalize rounded-pill font-weight-bold px-4"
                 append-icon="mdi-chevron-down"
@@ -151,7 +155,7 @@
             <template v-slot:activator="{ props }">
               <v-btn
                 v-bind="props"
-                color="black"
+                color="primary"
                 size="small"
                 class="text-capitalize rounded-pill font-weight-bold px-4"
                 append-icon="mdi-dots-vertical"
@@ -172,7 +176,7 @@
         </div>
 
         <!-- TABLAS DE DATOS SEGÚN EL MÓDULO ACTIVO -->
-        <v-card variant="outlined" color="grey-lighten-2" class="rounded-lg bg-white overflow-hidden" theme="light">
+        <v-card variant="outlined" color="grey-lighten-2" class="rounded-lg bg-white overflow-hidden" theme="ejp">
           
           <!-- Módulo: USUARIOS -->
           <v-data-table
@@ -368,9 +372,16 @@
                     cover
                     class="bg-grey-lighten-3 position-relative"
                   >
+                    <!-- Sin portada: icono del tipo de publicación -->
+                    <div
+                      v-if="!getCoverImage(item) && !isVideoPost(item)"
+                      class="d-flex fill-height align-center justify-center"
+                    >
+                      <v-icon icon="mdi-image-off-outline" color="grey" size="40" />
+                    </div>
                     <!-- Icono de Play si es un video -->
-                    <div 
-                      v-if="item.content_type?.slug === 'video'" 
+                    <div
+                      v-if="isVideoPost(item)" 
                       class="d-flex fill-height align-center justify-center" 
                       style="background: rgba(0,0,0,0.3);"
                     >
@@ -401,6 +412,142 @@
                 </v-card>
               </v-col>
             </v-row>
+          </div>
+
+          <!-- Módulo: PATROCINADORES -->
+          <v-data-table
+            v-else-if="activeTab === 'patrocinadores'"
+            :headers="sponsorHeaders"
+            :items="filteredSponsors"
+            :loading="sponsorsStore.loading"
+            class="admin-data-table bg-white"
+            density="compact"
+            no-data-text="Aún no hay patrocinadores. Agrégalos desde Acciones > Nuevo."
+          >
+            <template v-slot:item.name="{ item }">
+              <div class="d-flex align-center py-1">
+                <v-avatar size="32" rounded="lg" color="grey-lighten-3" class="mr-3 border">
+                  <v-img v-if="item.logo_url" :src="item.logo_url" contain />
+                  <span v-else class="text-caption font-weight-bold text-grey-darken-2">{{ initials(item.name) }}</span>
+                </v-avatar>
+                <div>
+                  <div class="font-weight-bold text-black">{{ item.name }}</div>
+                  <a v-if="item.website" :href="item.website" target="_blank" rel="noopener" class="text-xxs text-primary text-decoration-none">
+                    {{ item.website.replace(/^https?:\/\//, '') }}
+                  </a>
+                </div>
+              </div>
+            </template>
+            <template v-slot:item.contact="{ item }">
+              <div class="py-1">
+                <div>{{ item.contact_name || '—' }}</div>
+                <div class="text-xxs text-grey">{{ [item.email, item.phone].filter(Boolean).join(' · ') }}</div>
+              </div>
+            </template>
+            <template v-slot:item.advertisings_count="{ item }">
+              <v-chip size="x-small" variant="tonal" color="primary" class="font-weight-bold">{{ item.advertisings_count || 0 }}</v-chip>
+            </template>
+            <template v-slot:item.is_active="{ item }">
+              <v-chip size="x-small" :color="item.is_active ? 'success' : 'error'" variant="flat" class="font-weight-bold rounded-pill">
+                {{ statusLabel(item.is_active) }}
+              </v-chip>
+            </template>
+            <template v-slot:item.actions="{ item }">
+              <RowActionsMenu :can-delete="canDelete" @edit="openEditModal(item)" @delete="askDelete(item)">
+                <v-list-item prepend-icon="mdi-bullhorn-outline" title="Ver su publicidad" @click="showSponsorAds(item)" />
+              </RowActionsMenu>
+            </template>
+          </v-data-table>
+
+          <!-- Módulo: PUBLICIDAD -->
+          <div v-else-if="activeTab === 'publicidad'" class="bg-white">
+            <!-- Búsqueda por fecha, tipo de publicación y patrocinador -->
+            <v-form class="d-flex flex-wrap align-center ga-3 pa-4 border-b" @submit.prevent="loadAds">
+              <v-text-field
+                v-model="adFilters.date"
+                type="date"
+                label="Vigente el día"
+                prepend-inner-icon="mdi-calendar"
+                variant="outlined"
+                density="compact"
+                hide-details
+                clearable
+                class="ad-filter"
+              />
+              <v-select
+                v-model="adFilters.content_type_id"
+                :items="contentTypesStore.contentTypes"
+                item-title="name"
+                item-value="id"
+                label="Tipo de publicación"
+                variant="outlined"
+                density="compact"
+                hide-details
+                clearable
+                class="ad-filter"
+              />
+              <v-autocomplete
+                v-model="adFilters.sponsor_id"
+                :items="sponsorsStore.sponsors"
+                item-title="name"
+                item-value="id"
+                label="Patrocinador"
+                prepend-inner-icon="mdi-handshake-outline"
+                variant="outlined"
+                density="compact"
+                hide-details
+                clearable
+                no-data-text="No hay patrocinadores"
+                class="ad-filter ad-filter--wide"
+              />
+              <v-btn type="submit" color="primary" variant="flat" class="text-none rounded-pill" prepend-icon="mdi-magnify" :loading="advertisingStore.loading">
+                Buscar
+              </v-btn>
+              <v-btn v-if="hasAdFilters" variant="text" class="text-none" @click="clearAdFilters">Limpiar</v-btn>
+            </v-form>
+
+            <v-data-table
+              :headers="adHeaders"
+              :items="filteredAds"
+              :loading="advertisingStore.loading"
+              class="admin-data-table bg-white"
+              density="compact"
+              :no-data-text="hasAdFilters ? 'No hay publicidad con esos filtros.' : 'Aún no hay publicidad. Agrégala desde Acciones > Nuevo.'"
+            >
+              <template v-slot:item.title="{ item }">
+                <div class="d-flex align-center py-1">
+                  <v-img
+                    :src="adThumbnail(item)"
+                    :width="item.content_type?.slug === 'video' ? 64 : 36"
+                    height="45"
+                    :max-width="item.content_type?.slug === 'video' ? 64 : 36"
+                    cover
+                    class="rounded mr-3 bg-grey-lighten-3 flex-grow-0"
+                  >
+                    <div v-if="item.content_type?.slug === 'video'" class="d-flex fill-height align-center justify-center" style="background: rgba(0,0,0,0.25);">
+                      <v-icon icon="mdi-play" color="white" size="18" />
+                    </div>
+                  </v-img>
+                  <div class="font-weight-bold text-black">{{ item.title }}</div>
+                </div>
+              </template>
+              <template v-slot:item.sponsor="{ item }">{{ item.sponsor?.name || '—' }}</template>
+              <template v-slot:item.type="{ item }">{{ item.content_type?.name || '—' }}</template>
+              <template v-slot:item.validity="{ item }">
+                <span v-if="item.is_permanent" class="d-inline-flex align-center">
+                  <v-icon icon="mdi-infinity" size="16" class="mr-1" /> Permanente
+                </span>
+                <span v-else>{{ formatAdRange(item) }}</span>
+              </template>
+              <template v-slot:item.status="{ item }">
+                <v-chip size="x-small" :color="AD_STATUS[item.status]?.color" variant="flat" class="font-weight-bold rounded-pill">
+                  {{ AD_STATUS[item.status]?.label || item.status }}
+                </v-chip>
+              </template>
+              <template v-slot:item.actions="{ item }">
+                <RowActionsMenu :can-delete="canDelete" @edit="openEditModal(item)" @delete="askDelete(item)" />
+              </template>
+            </v-data-table>
           </div>
         </v-card>
       </v-container>
@@ -470,7 +617,7 @@
 
     <!-- Confirmación de Eliminación -->
     <v-dialog v-model="showDeleteDialog" max-width="420px" persistent>
-      <v-card class="rounded-xl pa-2" theme="light">
+      <v-card class="rounded-xl pa-2" theme="ejp">
         <v-card-title class="text-h6 font-weight-black text-grey-darken-4 pt-4 px-4">
           Eliminar registro
         </v-card-title>
@@ -500,6 +647,24 @@
       </v-card>
     </v-dialog>
 
+    <!-- Modal de Patrocinadores -->
+    <SponsorFormModal
+      v-if="showSponsorModal"
+      v-model="showSponsorModal"
+      :sponsor-data="selectedItem"
+      :loading="sponsorsStore.loading"
+      @save="handleSaveSponsor"
+    />
+
+    <!-- Modal de Publicidad -->
+    <AdvertisingFormModal
+      v-if="showAdModal"
+      v-model="showAdModal"
+      :ad-data="selectedItem"
+      :loading="advertisingStore.loading"
+      @save="handleSaveAd"
+    />
+
     <!-- Modal de Blog -->
     <BlogFormModal
       v-if="showBlogModal"
@@ -514,6 +679,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useDisplay } from 'vuetify'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
@@ -526,9 +692,15 @@ import TournamentSchedule from '@/components/TournamentSchedule.vue'
 import StandingsTable from '@/components/StandingsTable.vue'
 import BattingStatsTable from '@/components/BattingStatsTable.vue'
 import { parseDate } from '@/utils/dates'
+import { videoThumbnail } from '@/utils/video'
 
 // Asumo que crearás un store para el Blog similar a los demás
-import { useBlogsStore } from '@/stores/blogs' 
+import { useBlogsStore } from '@/stores/blogs'
+import { useSponsorsStore } from '@/stores/sponsors'
+import { useAdvertisingStore } from '@/stores/advertising'
+import { useContentTypesStore } from '@/stores/content_types'
+import SponsorFormModal from '@/components/SponsorFormModal.vue'
+import AdvertisingFormModal from '@/components/AdvertisingFormModal.vue'
 
 // Importación de componentes modales dedicados
 import UserFormModal from '@/components/UserFormModal.vue'
@@ -548,6 +720,9 @@ const rolesStore = useRolesStore()
 const teamsStore = useTeamsStore() 
 const playersStore = usePlayersStore()
 const blogStore = useBlogsStore() // Instanciar el store del blog
+const sponsorsStore = useSponsorsStore()
+const advertisingStore = useAdvertisingStore()
+const contentTypesStore = useContentTypesStore()
 
 const tournamentsStore = useTournamentsStore()
 const gamesStore = useGamesStore()
@@ -593,18 +768,36 @@ const showImportModal = ref(false)
 const showPlayerModal = ref(false)
 const showTournamentModal = ref(false)
 const showBlogModal = ref(false) // Nuevo estado para el modal de Blog
+const showSponsorModal = ref(false)
+const showAdModal = ref(false)
+
+// Menú lateral: fijo (y contraíble) en escritorio, desplegable en pantallas chicas
+const { mobile } = useDisplay()
+const drawer = ref(!mobile.value)
+const rail = ref(false)
+watch(mobile, (isMobile) => { drawer.value = !isMobile })
+const toggleDrawer = () => {
+  if (mobile.value) drawer.value = !drawer.value
+  else rail.value = !rail.value
+}
+const selectModule = (id) => {
+  activeTab.value = id
+  if (mobile.value) drawer.value = false
+}
 
 // Menú de navegación
 const menuItems = ref([
-  { id: 'usuarios', title: 'Usuarios', icon: 'mdi-account-group' },
-  { id: 'roles', title: 'Roles', icon: 'mdi-card-account-details' },
-  { id: 'equipos', title: 'Equipos', icon: 'mdi-shield-home' },
-  { id: 'jugadores', title: 'Jugadores', icon: 'mdi-account-badge' },
-  { id: 'torneos', title: 'Torneos', icon: 'mdi-trophy' },
-  { id: 'calendario', title: 'Calendario', icon: 'mdi-calendar-month' },
-  { id: 'posiciones', title: 'Posiciones', icon: 'mdi-format-list-numbered' },
-  { id: 'estadisticas', title: 'Estadísticas', icon: 'mdi-chart-box-outline' },
-  { id: 'blog', title: 'Blog de Noticias', icon: 'mdi-newspaper-variant-outline' }
+  { id: 'usuarios', title: 'Usuarios', icon: 'mdi-account-group', group: 'Administración' },
+  { id: 'roles', title: 'Roles', icon: 'mdi-card-account-details', group: 'Administración' },
+  { id: 'equipos', title: 'Equipos', icon: 'mdi-shield-home', group: 'Liga' },
+  { id: 'jugadores', title: 'Jugadores', icon: 'mdi-account-badge', group: 'Liga' },
+  { id: 'torneos', title: 'Torneos', icon: 'mdi-trophy', group: 'Liga' },
+  { id: 'calendario', title: 'Calendario', icon: 'mdi-calendar-month', group: 'Liga' },
+  { id: 'posiciones', title: 'Posiciones', icon: 'mdi-format-list-numbered', group: 'Liga' },
+  { id: 'estadisticas', title: 'Estadísticas', icon: 'mdi-chart-box-outline', group: 'Liga' },
+  { id: 'blog', title: 'Blog de Noticias', icon: 'mdi-newspaper-variant-outline', group: 'Contenido' },
+  { id: 'publicidad', title: 'Publicidad', icon: 'mdi-bullhorn-outline', group: 'Contenido' },
+  { id: 'patrocinadores', title: 'Patrocinadores', icon: 'mdi-handshake-outline', group: 'Contenido' }
 ])
 
 const filteredMenuItems = computed(() => {
@@ -620,13 +813,27 @@ const filteredMenuItems = computed(() => {
 
   let allowedIds = []
   if (user.roles[0].id == 2) {
-    allowedIds.push('equipos','jugadores','torneos','calendario','posiciones','estadisticas','blog')
+    allowedIds.push('equipos','jugadores','torneos','calendario','posiciones','estadisticas','blog','publicidad','patrocinadores')
   }
   else if (user.roles[0].id == 3) {
     allowedIds.push('blog')
   }
   if (!allowedIds.includes(activeTab.value)) activeTab.value = allowedIds[0]
   return menuItems.value.filter(item => allowedIds.includes(item.id))
+})
+
+// Módulos agrupados para el menú lateral (en el orden de menuItems)
+const menuGroups = computed(() => {
+  const groups = []
+  for (const item of filteredMenuItems.value) {
+    let group = groups.find(g => g.title === item.group)
+    if (!group) {
+      group = { title: item.group, items: [] }
+      groups.push(group)
+    }
+    group.items.push(item)
+  }
+  return groups
 })
 
 const currentModule = computed(() => {
@@ -665,6 +872,23 @@ const playerHeaders = [
   { title: 'CURP', key: 'curp' },
   { title: 'Fecha Nacimiento', key: 'birthdate' },
   { title: 'Estado', key: 'is_active', align: 'center' },
+  { title: 'Acciones', key: 'actions', align: 'center', sortable: false }
+]
+
+const sponsorHeaders = [
+  { title: 'Patrocinador', key: 'name' },
+  { title: 'Contacto', key: 'contact', sortable: false },
+  { title: 'Publicidad', key: 'advertisings_count', align: 'center' },
+  { title: 'Estado', key: 'is_active', align: 'center' },
+  { title: 'Acciones', key: 'actions', align: 'center', sortable: false }
+]
+
+const adHeaders = [
+  { title: 'Publicidad', key: 'title' },
+  { title: 'Patrocinador', key: 'sponsor', value: item => item.sponsor?.name },
+  { title: 'Tipo', key: 'type', value: item => item.content_type?.name },
+  { title: 'Vigencia', key: 'validity', sortable: false },
+  { title: 'Estado', key: 'status', align: 'center' },
   { title: 'Acciones', key: 'actions', align: 'center', sortable: false }
 ]
 
@@ -726,6 +950,53 @@ const filteredTournaments = computed(() => searchRows(tournamentsStore.tournamen
   tournament.id, tournament.name, ownerName(tournament), statusLabel(tournament.is_active)
 ]))
 
+const filteredSponsors = computed(() => searchRows(sponsorsStore.sponsors, sponsor => [
+  sponsor.name, sponsor.contact_name, sponsor.email, sponsor.phone, sponsor.website, statusLabel(sponsor.is_active)
+]))
+
+// PUBLICIDAD: estado según hoy y filtros (fecha, tipo y patrocinador se aplican en el servidor)
+const AD_STATUS = {
+  active: { label: 'Vigente', color: 'success' },
+  scheduled: { label: 'Programada', color: 'info' },
+  expired: { label: 'Vencida', color: 'grey' },
+  inactive: { label: 'Inactiva', color: 'error' }
+}
+
+const adFilters = ref({ date: null, content_type_id: null, sponsor_id: null })
+const hasAdFilters = computed(() => Object.values(adFilters.value).some(Boolean))
+
+const filteredAds = computed(() => searchRows(advertisingStore.ads, ad => [
+  ad.title, ad.sponsor?.name, ad.content_type?.name, AD_STATUS[ad.status]?.label
+]))
+
+const loadAds = async () => {
+  await advertisingStore.fetchAds(adFilters.value)
+  totalItems.value = advertisingStore.ads.length
+}
+
+const clearAdFilters = () => {
+  adFilters.value = { date: null, content_type_id: null, sponsor_id: null }
+  loadAds()
+}
+
+// Desde Patrocinadores: abre Publicidad filtrada por ese patrocinador
+const showSponsorAds = (sponsor) => {
+  adFilters.value = { date: null, content_type_id: null, sponsor_id: sponsor.id }
+  activeTab.value = 'publicidad'
+}
+
+const shortDateFormatter = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })
+const formatShortDate = value => value ? shortDateFormatter.format(parseDate(String(value).slice(0, 10))) : ''
+const formatAdRange = (ad) => {
+  if (!ad.starts_at && !ad.ends_at) return '—'
+  if (!ad.ends_at) return `Desde ${formatShortDate(ad.starts_at)}`
+  return `${formatShortDate(ad.starts_at)} – ${formatShortDate(ad.ends_at)}`
+}
+
+const adThumbnail = (ad) => (ad.content_type?.slug === 'video' ? videoThumbnail(ad.video_url, ad.image_url) : ad.image_url) || undefined
+
+const initials = (name) => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase()
+
 // Carga de datos por módulo
 const loadModuleData = async (tabId) => {
   const user = authStore.user;
@@ -767,8 +1038,20 @@ const loadModuleData = async (tabId) => {
         break
       case 'blog':
         // Asumiendo que crearás un método fetchPosts() en useBlogsStore
-        await blogStore.fetchPosts() 
+        await blogStore.fetchPosts()
         totalItems.value = blogStore.posts.length
+        break
+      case 'patrocinadores':
+        await sponsorsStore.fetchSponsors()
+        totalItems.value = sponsorsStore.sponsors.length
+        break
+      case 'publicidad':
+        // Catálogos de los filtros y la tabla con los filtros actuales
+        await Promise.all([
+          contentTypesStore.contentTypes.length ? null : contentTypesStore.fetchContentTypes(),
+          sponsorsStore.fetchSponsors(),
+          loadAds()
+        ])
         break
     }
   }
@@ -884,6 +1167,8 @@ const openCreateModal = () => {
   else if (activeTab.value === 'jugadores') showPlayerModal.value = true
   else if (activeTab.value === 'torneos') showTournamentModal.value = true
   else if (activeTab.value === 'blog') showBlogModal.value = true // Abrir modal de Blog
+  else if (activeTab.value === 'patrocinadores') showSponsorModal.value = true
+  else if (activeTab.value === 'publicidad') showAdModal.value = true
 }
 
 const openEditModal = (item) => {
@@ -894,6 +1179,39 @@ const openEditModal = (item) => {
   else if (activeTab.value === 'jugadores') showPlayerModal.value = true
   else if (activeTab.value === 'torneos') showTournamentModal.value = true
   else if (activeTab.value === 'blog') showBlogModal.value = true // Abrir modal de Blog
+  else if (activeTab.value === 'patrocinadores') showSponsorModal.value = true
+  else if (activeTab.value === 'publicidad') showAdModal.value = true
+}
+
+// GUARDAR PATROCINADORES
+const handleSaveSponsor = async ({ data, isEditing, closeModal, onError }) => {
+  try {
+    if (isEditing) await sponsorsStore.updateSponsor(data.id, data)
+    else await sponsorsStore.createSponsor(data)
+    closeModal()
+    totalItems.value = sponsorsStore.sponsors.length
+    notify.success(isEditing ? 'Patrocinador actualizado correctamente' : 'Patrocinador creado correctamente')
+  } catch (error) {
+    const message = getErrorMessage(error, 'Ocurrió un error al guardar el patrocinador')
+    onError?.(message)
+    notify.error(message)
+  }
+}
+
+// GUARDAR PUBLICIDAD
+const handleSaveAd = async ({ data, isEditing, closeModal, onError }) => {
+  try {
+    if (isEditing) await advertisingStore.updateAd(data.id, data)
+    else await advertisingStore.createAd(data)
+    closeModal()
+    // Se vuelve a consultar: con filtros activos el registro podría ya no corresponder
+    await loadAds()
+    notify.success(isEditing ? 'Publicidad actualizada correctamente' : 'Publicidad creada correctamente')
+  } catch (error) {
+    const message = getErrorMessage(error, 'Ocurrió un error al guardar la publicidad')
+    onError?.(message)
+    notify.error(message)
+  }
 }
 
 // GUARDAR USUARIOS
@@ -992,7 +1310,9 @@ const deleteConfigs = {
     count: () => playersStore.players.length
   },
   torneos: { store: tournamentsStore, label: item => item.name, count: () => tournamentsStore.tournaments.length },
-  blog: { store: blogStore, label: item => item.title, count: () => blogStore.posts.length }
+  blog: { store: blogStore, label: item => item.title, count: () => blogStore.posts.length },
+  patrocinadores: { store: sponsorsStore, label: item => item.name, count: () => sponsorsStore.sponsors.length },
+  publicidad: { store: advertisingStore, label: item => item.title, count: () => advertisingStore.ads.length }
 }
 
 const canDelete = computed(() => !!deleteConfigs[activeTab.value])
@@ -1091,51 +1411,31 @@ const handleLogout = async () => {
   router.push('/')
 }
 
-const getCoverImage = (item) => {
-  // Si es un video, intentar extraer la miniatura de YouTube
-  if (item.content_type?.slug === 'video' && item.video_url) {
-    const ytMatch = item.video_url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/)
-    if (ytMatch && ytMatch[1]) {
-      // Retorna la miniatura de alta calidad de YouTube
-      return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`
-    }
-  }
-  
-  // Si es artículo o la URL del video no es de YouTube, retornar la imagen guardada o un placeholder
-  return item.image_url || 'https://via.placeholder.com/400x225?text=Sin+Imagen'
-}
+// Portada de la tarjeta: miniatura de YouTube para videos; si no, la imagen guardada (o nada)
+const isVideoPost = (item) => item.content_type?.slug === 'video' || (!item.content_type && !!item.video_url)
+const getCoverImage = (item) => (isVideoPost(item) ? videoThumbnail(item.video_url, item.image_url) : item.image_url) || undefined
 </script>
 
 <style scoped>
 .bg-admin-grey {
-  background-color: #f8fafc !important;
+  background-color: rgb(var(--v-theme-background)) !important;
 }
 
 .border-bottom {
   border-bottom: 1px solid #e2e8f0 !important;
 }
 
-.module-link {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  padding: 0 14px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #64748b;
-  text-decoration: none;
-  border-bottom: 3px solid transparent;
-  white-space: nowrap;
+.admin-drawer {
+  border-right: 1px solid #e4e4ea !important;
 }
 
-.module-link:hover {
-  color: #0f172a;
+.ad-filter {
+  flex: 0 1 200px;
+  min-width: 170px;
 }
 
-.module-link--active {
-  color: #0f172a;
-  font-weight: 700;
-  border-bottom-color: rgb(var(--v-theme-primary));
+.ad-filter--wide {
+  flex-basis: 260px;
 }
 
 .text-field-search {

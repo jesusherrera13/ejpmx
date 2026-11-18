@@ -2,10 +2,10 @@
     
 
     <!-- 2. NAVBAR PRINCIPAL (Se queda igual, Vuetify la apilará automáticamente debajo) -->
-    <v-app-bar flat color="brand-dark" class="text-white px-md-8" height="56" order="1">
+    <v-app-bar flat color="brand-blue" class="text-white px-md-8" height="56" order="1">
       <div class="d-flex align-center mr-6">
         <span class="font-weight-black text-h6 tracking-wider">EL JUEGO PERFECTO</span>
-        <span class="text-caption font-weight-medium ml-1 text-grey-lighten-1">MX</span>
+        <span class="text-caption font-weight-medium ml-1 text-white">MX</span>
       </div>
 
       <div class="d-none d-lg-flex ga-4 align-center">
@@ -231,10 +231,11 @@
         <v-row>
           <!-- COLUMNA IZQUIERDA (2/3 de la pantalla en desktop) -->
           <v-col cols="12" lg="8">
-            <!-- NOTICIA DESTACADA -->
-            <v-card flat class="rounded-lg overflow-hidden bg-white mb-8">
+            <!-- NOTICIA DESTACADA: el artículo publicado más reciente -->
+            <v-card v-if="featured" flat class="rounded-lg overflow-hidden bg-white mb-8" :to="postRoute(featured)">
               <v-img
-                src="https://images.unsplash.com/photo-1544045560-6b9fbe6402fc?q=80&w=1200"
+                v-if="featured.image_url"
+                :src="featured.image_url"
                 height="450"
                 cover
                 class="align-end"
@@ -247,37 +248,49 @@
               </v-img>
 
               <v-card-item class="pa-6">
+                <div class="text-caption font-weight-bold text-primary text-uppercase mb-2">
+                  {{ formatPostDate(featured.created_at) }}
+                </div>
                 <h1 class="text-h4 font-weight-black line-height-tight mb-4 text-grey-darken-4">
-                  Cinco interrogantes que le darían forma al mercado de cambios
+                  {{ featured.title }}
                 </h1>
-                <p class="text-body-1 text-grey-darken-2">
-                  El panorama de la <strong class="text-primary">Fecha Límite de Cambios</strong> todavía está algo opaco con el inicio de la segunda mitad, pero las piezas clave se están moviendo rápido en las Grandes Ligas.
+                <p class="text-body-1 text-grey-darken-2 line-clamp-3">
+                  {{ featured.excerpt }}
                 </p>
               </v-card-item>
             </v-card>
 
-            <!-- SECCIÓN: MOMENTOS CULMINANTES -->
-            <div class="mb-8">
+            <v-card v-else-if="blogsStore.loading || !blogsStore.loaded" flat class="rounded-lg overflow-hidden bg-white mb-8">
+              <v-skeleton-loader type="image, article" />
+            </v-card>
+
+            <v-card v-else flat class="rounded-lg bg-white mb-8 pa-10 text-center text-grey-darken-1">
+              <v-icon icon="mdi-newspaper-variant-outline" size="48" color="primary" class="mb-3" />
+              <div class="text-h6 font-weight-bold text-grey-darken-3">Pronto habrá noticias</div>
+              <div class="text-body-2">Aquí aparecerán los artículos que se publiquen.</div>
+            </v-card>
+
+            <!-- SECCIÓN: MOMENTOS CULMINANTES (videos publicados) -->
+            <div v-if="videos.length" class="mb-8">
               <h2 class="text-h5 font-weight-black mb-4 text-grey-darken-4">
-                Momentos Culminantes
+                Momentos culminantes
               </h2>
               <v-row>
                 <v-col
-                  v-for="(moment, index) in highlightMoments"
-                  :key="index"
+                  v-for="video in videos"
+                  :key="video.id"
                   cols="12"
                   sm="6"
                   md="3"
                 >
-                  <v-card flat class="bg-transparent" link>
-                    <!-- Miniatura de Video -->
+                  <v-card flat class="bg-transparent" :to="postRoute(video)">
+                    <!-- Miniatura del video -->
                     <v-img
-                      :src="moment.image"
+                      :src="videoThumbnail(video.video_url, video.image_url) || undefined"
                       height="140"
                       cover
-                      class="rounded-lg align-end position-relative video-thumbnail"
+                      class="rounded-lg align-end position-relative video-thumbnail bg-brand-surface"
                     >
-                      <!-- Play Button Icon Overlay -->
                       <div class="play-btn-overlay">
                         <v-btn
                           icon="mdi-play"
@@ -287,20 +300,10 @@
                           class="play-icon"
                         />
                       </div>
-                      <!-- Badge de Tiempo -->
-                      <v-chip
-                        density="compact"
-                        color="black"
-                        variant="flat"
-                        class="position-absolute bottom-0 right-0 ma-2 text-xxs font-weight-bold text-white px-2"
-                        style="opacity: 0.85"
-                      >
-                        {{ moment.duration }}
-                      </v-chip>
                     </v-img>
                     <v-card-item class="px-1 py-3">
                       <p class="text-subtitle-2 font-weight-bold text-grey-darken-4 text-wrap line-clamp-2 leading-snug">
-                        {{ moment.title }}
+                        {{ video.title }}
                       </p>
                     </v-card-item>
                   </v-card>
@@ -308,15 +311,15 @@
               </v-row>
             </div>
 
-            <!-- SECCIÓN: POPULAR -->
-            <div class="mb-8">
+            <!-- SECCIÓN: MÁS NOTICIAS (los siguientes artículos) -->
+            <div v-if="moreArticles.length" class="mb-8">
               <h2 class="text-h5 font-weight-black mb-4 text-grey-darken-4">
-                Popular
+                Más noticias
               </h2>
               <v-row>
                 <v-col
-                  v-for="(pop, index) in popularItems"
-                  :key="index"
+                  v-for="post in moreArticles"
+                  :key="post.id"
                   cols="12"
                   sm="6"
                   md="3"
@@ -325,21 +328,20 @@
                     flat
                     height="320"
                     class="rounded-lg overflow-hidden position-relative d-flex align-end cursor-pointer popular-card"
-                    :class="pop.image ? '' : 'bg-grey-lighten-2'"
+                    :class="post.image_url ? '' : 'bg-brand-surface'"
+                    :to="postRoute(post)"
                   >
-                    <!-- Imagen de fondo -->
                     <v-img
-                      v-if="pop.image"
-                      :src="pop.image"
+                      v-if="post.image_url"
+                      :src="post.image_url"
                       cover
                       class="position-absolute fill-height w-100"
                     />
-                    <!-- Gradiente oscuro inferior para legibilidad del texto -->
                     <div class="gradient-overlay"></div>
-                    
+
                     <v-card-text class="position-relative z-10 text-white pa-4">
                       <h3 class="text-subtitle-1 font-weight-black line-height-tight text-white mb-0">
-                        {{ pop.title }}
+                        {{ post.title }}
                       </h3>
                     </v-card-text>
                   </v-card>
@@ -415,16 +417,19 @@
                 Titulares
               </h2>
 
-              <v-list lines="two" class="bg-transparent pa-0">
+              <div v-if="!headlines.length" class="text-body-2 text-grey-darken-1 py-2">
+                {{ blogsStore.loading ? 'Cargando…' : 'Aún no hay publicaciones.' }}
+              </div>
+              <v-list v-else lines="two" class="bg-transparent pa-0">
                 <v-list-item
-                  v-for="(news, idx) in headlines"
-                  :key="idx"
+                  v-for="news in headlines"
+                  :key="news.id"
                   class="px-0 py-3 border-bottom-dashed"
-                  link
+                  :to="postRoute(news)"
                 >
                   <template v-slot:prepend>
                     <v-avatar color="brand-surface" class="text-white" size="36">
-                      <v-icon size="18">{{ news.icon || 'mdi-baseball' }}</v-icon>
+                      <v-icon size="18">{{ news.type === 'video' ? 'mdi-play' : 'mdi-baseball' }}</v-icon>
                     </v-avatar>
                   </template>
 
@@ -434,6 +439,9 @@
                 </v-list-item>
               </v-list>
             </v-card>
+
+            <!-- BLOQUE: PUBLICIDAD DE PATROCINADORES (al azar entre la vigente) -->
+            <SponsoredAds />
 
             <!-- BLOQUE: JUEGO DE ESTRELLAS 2026 -->
             <v-card flat class="pa-5 rounded-lg bg-white">
@@ -464,12 +472,19 @@
           </v-col>
         </v-row>
       </v-container>
+
+      <!-- PIE DE PÁGINA: redes y contacto -->
+      <SiteFooter />
     </v-main>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth';
+import { usePublicBlogsStore } from '@/stores/publicBlogs'
+import { videoThumbnail } from '@/utils/video'
+import SponsoredAds from '@/components/SponsoredAds.vue'
+import SiteFooter from '@/components/SiteFooter.vue'
 
 const authStore = useAuthStore();
 
@@ -604,49 +619,23 @@ const tickerItems = ref([
   }
 ])
 
-// SECCIÓN: Momentos Culminantes
-const highlightMoments = ref([
-  {
-    title: 'Lo mejor del jueves en Grandes Ligas',
-    image: 'https://images.unsplash.com/photo-1516738901171-8eb4fc13bd20?q=80&w=400',
-    duration: '2:10'
-  },
-  {
-    title: 'Álvarez conecta 2 jonrones en la victoria de Mets',
-    image: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?q=80&w=400',
-    duration: '1:14'
-  },
-  {
-    title: 'Baty y Álvarez dan HR consecutivos en la 7ma',
-    image: 'https://images.unsplash.com/photo-1544045560-6b9fbe6402fc?q=80&w=400',
-    duration: '0:45'
-  },
-  {
-    title: 'Devin Williams sella el triunfo de Cerveceros',
-    image: 'https://images.unsplash.com/photo-1530541930197-ff16ac917b0e?q=80&w=400',
-    duration: '1:02'
-  }
-])
+// Publicaciones del panel de administración (artículos y videos publicados)
+const blogsStore = usePublicBlogsStore()
 
-// SECCIÓN: Popular (Estilo Cards Verticales)
-const popularItems = ref([
-  {
-    title: 'La Liga Americana conquista el Juego de Estrellas 2026',
-    image: 'https://images.unsplash.com/photo-1562074244-3523ba35f020?q=80&w=400'
-  },
-  {
-    title: 'D-backs llegan al receso tras barrer a L.A.',
-    image: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?q=80&w=400'
-  },
-  {
-    title: 'Espacio publicitario o nota en desarrollo',
-    image: '' // Tarjeta gris/vacía idéntica a la referencia
-  },
-  {
-    title: 'Machado lidera a Padres contra los Azulejos',
-    image: 'https://images.unsplash.com/photo-1471295263379-6cd96c1f0034?q=80&w=400'
-  }
-])
+const featured = computed(() => blogsStore.articles[0] || null)
+const moreArticles = computed(() => blogsStore.articles.slice(1, 5))
+const videos = computed(() => blogsStore.videos.slice(0, 4))
+const headlines = computed(() => blogsStore.posts.slice(0, 7))
+
+const postRoute = (post) => ({ name: 'BlogPost', params: { id: post.id, slug: post.slug || 'publicacion' } })
+
+const formatPostDate = (value) => value
+  ? new Date(value).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+  : ''
+
+onMounted(() => {
+  blogsStore.fetchLatest()
+})
 
 // SECCIÓN: Posiciones (Estructura de tablas por División)
 const standings = ref([
@@ -680,17 +669,6 @@ const standings = ref([
       { name: 'LAA', logoChar: 'A', color: '#BA0021', w: 38, l: 59, pct: '.392', gb: '11.5' }
     ]
   }
-])
-
-// Titulares columna derecha
-const headlines = ref([
-  { title: 'Las 5 interrogantes tras el All-Star que le darían forma a la Fecha Límite de Cambios', icon: 'mdi-help-circle-outline' },
-  { title: 'MLB anunció su calendario de la temporada regular del 2027', icon: 'mdi-calendar-range' },
-  { title: 'Álvarez, Baty -- que serían fichas de cambio - impulsan victoria de Mets sobre Filis', icon: 'mdi-baseball' },
-  { title: 'Acuña Jr. se destacó en su rehabilitación de liga menor con Bravos', icon: 'mdi-lightning-bolt-outline' },
-  { title: 'Soto no perdería tiempo tras salir del partido por molestia en una pantorrilla', icon: 'mdi-alert-circle-outline' },
-  { title: 'Power Rankings: Cómo se perfilan los equipos para la segunda mitad', icon: 'mdi-trending-up' },
-  { title: 'Ohtani arrasa en los Premios ESPYS gracias a su histórico Juego 4', icon: 'mdi-trophy-outline' }
 ])
 
 // SECCIÓN ADICIONAL: Juego de Estrellas 2026 (Columna Derecha)
@@ -755,6 +733,12 @@ const handleLogout = async () => {
 }
 
 /* Limitación de líneas en textos largos */
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

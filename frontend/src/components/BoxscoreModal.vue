@@ -2,7 +2,7 @@
 <!-- Captura del box score de un partido: Score, Line Score, Bateo, Bateo detallado y Scorecard -->
 <template>
   <v-dialog v-model="dialog" max-width="1440px" persistent scrollable>
-    <v-card class="rounded-xl pa-2" theme="light">
+    <v-card class="rounded-xl pa-2" theme="ejp">
       <!-- Header -->
       <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
         <div class="text-h6 text-grey-darken-4 text-wrap">
@@ -673,7 +673,7 @@
 
       <!-- Glosario: significado de las abreviaciones del scorecard -->
       <v-dialog v-model="glossaryDialog" max-width="900px" scrollable>
-        <v-card class="rounded-xl pa-2" theme="light">
+        <v-card class="rounded-xl pa-2" theme="ejp">
           <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
             <span class="text-h6 font-weight-black text-grey-darken-4">Glosario</span>
             <v-btn icon="mdi-close" variant="text" density="comfortable" @click="glossaryDialog = false" />
@@ -713,7 +713,7 @@
 
       <!-- Roster del equipo: doble clic en un jugador para agregarlo al lineup -->
       <v-dialog v-model="rosterDialog" max-width="720px" scrollable>
-        <v-card v-if="game" class="rounded-xl pa-2" theme="light">
+        <v-card v-if="game" class="rounded-xl pa-2" theme="ejp">
           <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
             <div>
               <div class="text-h6 font-weight-black text-grey-darken-4">Roster de {{ teamOf(battingSide).name }}</div>

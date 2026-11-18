@@ -2,7 +2,7 @@
 <!-- Edita un partido del calendario: equipos que se enfrentan, fecha y hora -->
 <template>
   <v-dialog v-model="dialog" max-width="600px" persistent>
-    <v-card class="rounded-xl pa-2" theme="light">
+    <v-card class="rounded-xl pa-2" theme="ejp">
       <!-- Header -->
       <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
         <div>

@@ -2,7 +2,7 @@
 <!-- Roster de un equipo en el torneo: a la izquierda sus jugadores, a la derecha los disponibles -->
 <template>
   <v-dialog v-model="dialog" max-width="1200px" scrollable>
-    <v-card class="rounded-xl pa-2" theme="light">
+    <v-card class="rounded-xl pa-2" theme="ejp">
       <!-- Bloquea el modal mientras se agrega o quita un jugador -->
       <v-overlay
         :model-value="saving"

@@ -2,12 +2,12 @@
 <!-- Configuración de un torneo: equipos participantes y rol de juegos -->
 <template>
   <!-- Tema claro fijo: con el tema del sistema en oscuro los campos quedaban blancos sobre blanco -->
-  <v-app class="bg-admin-grey" theme="light">
+  <v-app class="bg-admin-grey" theme="ejp">
 
     <!-- BARRA SUPERIOR -->
-    <v-app-bar flat color="white" class="border-bottom px-4" height="64">
-      <div class="font-weight-black text-grey-darken-4 text-h6 d-flex align-center">
-        <v-icon icon="mdi-shield-crown" color="primary" class="mr-2" size="26" />
+    <v-app-bar flat color="brand-blue" class="px-4" height="64">
+      <div class="font-weight-black text-white text-h6 d-flex align-center">
+        <v-icon icon="mdi-shield-crown" color="white" class="mr-2" size="26" />
         Panel de Administración
       </div>
 
@@ -17,7 +17,7 @@
         :to="{ name: 'AdminDashboard', query: { tab: 'torneos' } }"
         variant="text"
         size="small"
-        class="text-capitalize font-weight-bold text-grey-darken-2"
+        class="text-capitalize font-weight-bold text-white"
         prepend-icon="mdi-arrow-left"
       >
         Volver a Torneos
@@ -153,7 +153,7 @@
                   <template v-slot:activator="{ props: menuProps }">
                     <v-btn
                       v-bind="menuProps"
-                      color="black"
+                      color="primary"
                       size="small"
                       variant="outlined"
                       class="text-none font-weight-bold rounded-pill"
@@ -217,7 +217,7 @@
                       <template v-slot:activator="{ props: menuProps }">
                         <v-btn
                           v-bind="menuProps"
-                          color="black"
+                          color="primary"
                           size="small"
                           variant="outlined"
                           class="text-none font-weight-bold rounded-pill"
@@ -279,7 +279,7 @@
                     </v-btn>
                     <v-btn
                       v-else
-                      color="black"
+                      color="primary"
                       size="small"
                       variant="flat"
                       class="text-none font-weight-bold rounded-pill px-4"
@@ -329,7 +329,7 @@
 
     <!-- Equipos del torneo: a la izquierda los seleccionados (inician con los inscritos), a la derecha los disponibles -->
     <v-dialog v-model="showAddDialog" max-width="960px">
-      <v-card class="rounded-xl pa-2" theme="light">
+      <v-card class="rounded-xl pa-2" theme="ejp">
         <v-card-title class="text-h6 font-weight-black text-grey-darken-4 pt-4 px-4">
           Equipos del torneo
         </v-card-title>
@@ -487,7 +487,7 @@
 
     <!-- Confirmaciones -->
     <v-dialog :model-value="!!confirmAction" max-width="420px" persistent>
-      <v-card class="rounded-xl pa-2" theme="light">
+      <v-card class="rounded-xl pa-2" theme="ejp">
         <v-card-title class="text-h6 font-weight-black text-grey-darken-4 pt-4 px-4">
           {{ confirmTexts[confirmAction]?.title }}
         </v-card-title>
@@ -893,7 +893,7 @@ onMounted(async () => {
 }
 
 .bg-admin-grey {
-  background-color: #f8fafc !important;
+  background-color: rgb(var(--v-theme-background)) !important;
 }
 
 .border-bottom {
