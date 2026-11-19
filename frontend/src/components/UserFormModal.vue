@@ -10,10 +10,11 @@
       </v-card-title>
 
       <v-divider class="my-2" />
+      <v-progress-linear v-if="preparing" indeterminate color="primary" class="mt-n2" />
 
       <!-- Formulario -->
       <v-card-text class="pt-2">
-        <v-form ref="formRef" v-model="isFormValid" @submit.prevent="handleSubmit">
+        <v-form ref="formRef" v-model="isFormValid" :disabled="preparing" @submit.prevent="handleSubmit">
           <v-container class="pa-0">
             <v-row density="comfortable">
 
@@ -110,6 +111,7 @@
           variant="flat"
           class="text-capitalize rounded-pill px-5 font-weight-bold"
           :loading="loading"
+          :disabled="preparing"
           @click="handleSubmit"
         >
           {{ isEditing ? 'Guardar Cambios' : 'Crear Usuario' }}
@@ -120,7 +122,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 // Ajusta la ruta correcta a donde tienes tu store de Pinia
 import { useRolesStore } from '@/stores/roles' 
 
@@ -162,30 +164,37 @@ const dialog = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
-// Cargamos los roles al momento de que el modal (o el componente padre) se monta
-onMounted(() => {
-  rolesStore.fetchRoles()
-})
+// Mientras se cargan los roles el formulario queda deshabilitado
+const preparing = ref(false)
+let loadToken = 0
 
-watch(
-  () => props.userData,
-  (newUser) => {
-    if (newUser && Object.keys(newUser).length > 0) {
+// Primero se cargan los roles del combo y después los datos del usuario,
+// para que el v-select tenga la opción disponible al asignar role_id
+const loadForm = async () => {
+  if (!props.modelValue) return
+  const token = ++loadToken
+  preparing.value = true
+  await rolesStore.ensureRoles()
+  // Si mientras tanto se cerró o se abrió otro usuario, esta carga ya no aplica
+  if (token !== loadToken || !props.modelValue) return
 
-      // Extraemos el role_id basado en los datos devueltos por el backend
-      const assignedRolId = newUser.roles?.length ? newUser.roles[0].id : 4;
+  const newUser = props.userData
+  if (newUser && Object.keys(newUser).length > 0) {
+    // Extraemos el role_id basado en los datos devueltos por el backend
+    const assignedRolId = newUser.roles?.length ? newUser.roles[0].id : 4
 
-      formData.value = { 
-        ...newUser, 
-        role_id: assignedRolId,
-        password: ''
-      }
-    } else {
-      formData.value = { ...defaultForm }
+    formData.value = {
+      ...newUser,
+      role_id: assignedRolId,
+      password: ''
     }
-  },
-  { immediate: true, deep: true }
-)
+  } else {
+    formData.value = { ...defaultForm }
+  }
+  preparing.value = false
+}
+
+watch(() => [props.modelValue, props.userData], loadForm, { immediate: true })
 
 const closeModal = () => {
   dialog.value = false
@@ -194,6 +203,7 @@ const closeModal = () => {
 }
 
 const handleSubmit = async () => {
+  if (preparing.value) return
   const { valid } = await formRef.value.validate()
   if (!valid) return
 

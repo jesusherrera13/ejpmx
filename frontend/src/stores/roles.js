@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import axiosClient from '@/axios'
 
+let pendingFetch = null
+
 export const useRolesStore = defineStore('Roles', {
   state: () => ({
     roles: [],
@@ -9,6 +11,15 @@ export const useRolesStore = defineStore('Roles', {
   }),
 
   actions: {
+    // Devuelve los roles ya cargados o espera la petición en curso (no duplica llamadas)
+    ensureRoles() {
+      if (this.roles.length) return Promise.resolve(this.roles)
+      if (!pendingFetch) {
+        pendingFetch = this.fetchRoles().finally(() => { pendingFetch = null })
+      }
+      return pendingFetch.then(() => this.roles)
+    },
+
     async fetchRoles() {
       this.loading = true
       this.error = null
