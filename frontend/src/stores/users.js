@@ -42,7 +42,7 @@ export const useUsersStore = defineStore('users', {
     async updateUser(id, userData) {
       this.loading = true
       try {
-        const response = await axiosClient.put(`/user${id}/`, userData)
+        const response = await axiosClient.put(`/user/${id}`, userData)
         // Actualizamos los datos en el arreglo local
         const index = this.users.findIndex(u => u.id === id)
         if (index !== -1) {

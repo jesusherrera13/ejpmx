@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use App\Models\User;
+use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
@@ -36,15 +38,23 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+        // Asignar roles solo lo puede hacer un administrador (/register es público)
+        abort_unless($request->user()->isAdmin(), 403);
+
         $validated = $request->validate([
             'name' => 'required|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required',
+            'role_id' => 'nullable|integer|exists:roles,id',
         ]);
-        
-        $team = User::create($validated);
 
-        return response()->json($team);
+        $user = User::create($validated);
+
+        if (!empty($validated['role_id'])) {
+            $user->assignRole(Role::find($validated['role_id']));
+        }
+
+        return response()->json($this->withRoles($user));
     }
 
     /**
@@ -58,9 +68,39 @@ class UserController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, User $user)
     {
-        //
+        abort_unless($request->user()->isAdmin(), 403);
+
+        $validated = $request->validate([
+            'name' => 'required|max:255',
+            'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+            'password' => 'nullable|string',
+            'role_id' => 'nullable|integer|exists:roles,id',
+        ]);
+
+        $user->name = $validated['name'];
+        $user->email = $validated['email'];
+        if (!empty($validated['password'])) {
+            $user->password = $validated['password'];
+        }
+        $user->save();
+
+        if ($request->has('role_id')) {
+            $user->syncRoles($validated['role_id'] ? [Role::find($validated['role_id'])] : []);
+        }
+
+        return response()->json($this->withRoles($user));
+    }
+
+    // Misma forma que devuelve index(): usuario con roles y permisos, sin pivots
+    private function withRoles(User $user): User
+    {
+        $user->load(['roles:id,name', 'roles.permissions:id,name']);
+        $user->roles->makeHidden('pivot');
+        $user->roles->each(fn ($role) => $role->permissions->makeHidden('pivot'));
+
+        return $user->setVisible(['id', 'name', 'email', 'roles']);
     }
 
     /**
