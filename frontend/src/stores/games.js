@@ -4,6 +4,18 @@ import { defineStore } from 'pinia'
 import axiosClient from '@/axios'
 import { downloadFile } from '@/utils/download'
 
+// Solo los campos de cada partido que el backend guarda (sin los equipos anidados)
+const toGamePayload = games => games.map(game => ({
+  round: game.round,
+  matchday: game.matchday,
+  series: game.series,
+  series_game: game.series_game,
+  game_number: game.game_number,
+  home_team_id: game.home_team_id,
+  away_team_id: game.away_team_id,
+  scheduled_at: game.scheduled_at
+}))
+
 export const useGamesStore = defineStore('games', {
   state: () => ({
     games: [],
@@ -100,11 +112,34 @@ export const useGamesStore = defineStore('games', {
       }
     },
 
-    // options: { start_date, rounds, games_per_series, rest_days }
-    async generate(tournamentId, options) {
+    // Borrador guardado del calendario: null o { options, games, byes, saved_at }
+    async fetchDraft(tournamentId) {
+      const response = await axiosClient.get(`/tournaments/${tournamentId}/games/draft`)
+      return response.data.draft
+    },
+
+    // Guarda la vista previa (con sus cambios manuales) como borrador
+    async saveDraft(tournamentId, options, games) {
       this.loading = true
       try {
-        const response = await axiosClient.post(`/tournaments/${tournamentId}/games/generate`, options)
+        const response = await axiosClient.put(`/tournaments/${tournamentId}/games/draft`, { ...options, games: toGamePayload(games) })
+        return response.data.draft
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async discardDraft(tournamentId) {
+      await axiosClient.delete(`/tournaments/${tournamentId}/games/draft`)
+    },
+
+    // options: { start_date, rounds, games_per_series, rest_days }
+    // games (opcional): partidos de la vista previa con cambios manuales; si no, el backend los genera
+    async generate(tournamentId, options, games = null) {
+      this.loading = true
+      try {
+        const payload = games ? { ...options, games: toGamePayload(games) } : options
+        const response = await axiosClient.post(`/tournaments/${tournamentId}/games/generate`, payload)
         this.games = response.data.games
         this.byes = response.data.byes
         return true

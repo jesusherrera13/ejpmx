@@ -85,7 +85,7 @@
                   </template>
                   <v-list density="compact" class="py-1">
                     <v-list-item prepend-icon="mdi-pencil" title="Editar" @click="emit('edit', series)" />
-                    <v-list-item prepend-icon="mdi-clipboard-text-outline" title="Boxscore" @click="emit('boxscore', series)" />
+                    <v-list-item v-if="showBoxscore" prepend-icon="mdi-clipboard-text-outline" title="Boxscore" @click="emit('boxscore', series)" />
                   </v-list>
                 </v-menu>
               </td>
@@ -114,7 +114,7 @@
                   </template>
                   <v-list density="compact" class="py-1">
                     <v-list-item prepend-icon="mdi-pencil" title="Editar" @click="emit('edit', game)" />
-                    <v-list-item prepend-icon="mdi-clipboard-text-outline" title="Boxscore" @click="emit('boxscore', game)" />
+                    <v-list-item v-if="showBoxscore" prepend-icon="mdi-clipboard-text-outline" title="Boxscore" @click="emit('boxscore', game)" />
                   </v-list>
                 </v-menu>
               </td>
@@ -139,7 +139,9 @@ const props = defineProps({
   defaultView: { type: String, default: 'games' },
   emptyText: { type: String, default: 'El torneo aún no tiene calendario.' },
   // Menú de opciones (Editar, Boxscore) en cada renglón
-  showActions: { type: Boolean, default: false }
+  showActions: { type: Boolean, default: false },
+  // En la vista previa (calendario sin guardar) solo se edita
+  showBoxscore: { type: Boolean, default: true }
 })
 
 // Reciben el partido (vista Partidos) o la serie con sus partidos (vista Series)

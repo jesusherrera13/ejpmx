@@ -17,11 +17,16 @@ class Tournament extends Model
         'user_id',
         'name',
         'games_per_series',
+        'schedule_draft',
         'is_active',
     ];
 
+    // El borrador del calendario solo se lee por su endpoint
+    protected $hidden = ['schedule_draft'];
+
     protected $casts = [
         'games_per_series' => 'integer',
+        'schedule_draft' => 'array',
         'is_active' => 'boolean',
     ];
 

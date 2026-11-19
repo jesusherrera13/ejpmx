@@ -93,6 +93,9 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
     Route::get('/tournaments/{tournament}/games/export/pdf', [GameController::class, 'exportPdf']);
     Route::post('/tournaments/{tournament}/games/preview', [GameController::class, 'preview']);
     Route::post('/tournaments/{tournament}/games/generate', [GameController::class, 'generate']);
+    Route::get('/tournaments/{tournament}/games/draft', [GameController::class, 'draft']);
+    Route::put('/tournaments/{tournament}/games/draft', [GameController::class, 'saveDraft']);
+    Route::delete('/tournaments/{tournament}/games/draft', [GameController::class, 'discardDraft']);
     Route::put('/tournaments/{tournament}/games/{game}', [GameController::class, 'update']);
     Route::get('/tournaments/{tournament}/games/{game}/boxscore', [BoxscoreController::class, 'show']);
     Route::put('/tournaments/{tournament}/games/{game}/boxscore', [BoxscoreController::class, 'update']);

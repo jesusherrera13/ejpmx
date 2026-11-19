@@ -234,18 +234,74 @@ class GameController extends Controller
     }
 
     /**
+     * Borrador del calendario: { draft: null } o { draft: { options, games, byes, saved_at } } con la misma
+     * forma que preview(). Si desde que se guardó cambiaron los equipos inscritos ya no aplica y se ignora.
+     */
+    public function draft(Tournament $tournament)
+    {
+        $this->ensureOwner($tournament);
+
+        $draft = $tournament->schedule_draft;
+        $teams = $this->tournamentTeams($tournament);
+
+        $draftTeamIds = collect($draft['games'] ?? [])->flatMap(fn ($game) => [$game['home_team_id'], $game['away_team_id']])->unique();
+        if (! $draft || $draftTeamIds->diff($teams->keys())->isNotEmpty()) {
+            return response()->json(['draft' => null]);
+        }
+
+        return response()->json(['draft' => [
+            'options' => $draft['options'],
+            'saved_at' => $draft['saved_at'] ?? null,
+        ] + $this->hydrateSchedule($draft['games'], $teams)]);
+    }
+
+    /**
+     * Guarda como borrador los parámetros y los partidos de la vista previa, con sus cambios manuales.
+     */
+    public function saveDraft(Request $request, Tournament $tournament)
+    {
+        $this->ensureOwner($tournament);
+
+        $options = $this->validateOptions($request);
+        $games = $this->validateGames($request, $tournament);
+
+        $tournament->update(['schedule_draft' => [
+            'options' => $options,
+            'games' => $games,
+            'saved_at' => now()->toDateTimeString(),
+        ]]);
+
+        return $this->draft($tournament);
+    }
+
+    public function discardDraft(Tournament $tournament)
+    {
+        $this->ensureOwner($tournament);
+
+        $tournament->update(['schedule_draft' => null]);
+
+        return response()->json(['message' => 'Borrador descartado']);
+    }
+
+    /**
      * Genera (o vuelve a generar) el calendario todos contra todos con los equipos inscritos
-     * y guarda en el torneo los juegos por serie con que se generó.
+     * y guarda en el torneo los juegos por serie con que se generó. Si se envían "games" (la vista
+     * previa con cambios manuales) se guardan esos partidos en lugar de generarlos. Descarta el borrador.
      */
     public function generate(Request $request, Tournament $tournament, RoundRobinScheduler $scheduler)
     {
         $this->ensureOwner($tournament);
         $this->ensureNoResults($tournament);
 
-        $schedule = $this->buildSchedule($request, $tournament, $scheduler);
+        if ($request->has('games')) {
+            $this->validateOptions($request);
+            $schedule = ['games' => $this->validateGames($request, $tournament)];
+        } else {
+            $schedule = $this->buildSchedule($request, $tournament, $scheduler);
+        }
 
         DB::transaction(function () use ($tournament, $schedule, $request) {
-            $tournament->update(['games_per_series' => $request->integer('games_per_series')]);
+            $tournament->update(['games_per_series' => $request->integer('games_per_series'), 'schedule_draft' => null]);
             $tournament->games()->delete();
 
             $now = now();
@@ -317,17 +373,7 @@ class GameController extends Controller
      */
     private function buildSchedule(Request $request, Tournament $tournament, RoundRobinScheduler $scheduler): array
     {
-        $validated = $request->validate([
-            'start_date' => 'required|date',
-            'rounds' => 'required|integer|min:1|max:4',
-            'games_per_series' => ['required', 'integer', Rule::in(Tournament::GAMES_PER_SERIES_OPTIONS)],
-            'rest_days' => 'required|integer|min:0|max:7',
-        ], [], [
-            'start_date' => 'fecha de inicio',
-            'rounds' => 'vueltas',
-            'games_per_series' => 'juegos por serie',
-            'rest_days' => 'días de descanso',
-        ]);
+        $validated = $this->validateOptions($request);
 
         $teamIds = $tournament->teams()->pluck('teams.id')->all();
         abort_if(count($teamIds) < 2, 422, 'Se necesitan al menos 2 equipos inscritos para generar el calendario.');
@@ -339,6 +385,93 @@ class GameController extends Controller
             CarbonImmutable::parse($validated['start_date']),
             $validated['rest_days']
         );
+    }
+
+    // Parámetros del rol de juegos
+    private function validateOptions(Request $request): array
+    {
+        return $request->validate([
+            'start_date' => 'required|date',
+            'rounds' => 'required|integer|min:1|max:4',
+            'games_per_series' => ['required', 'integer', Rule::in(Tournament::GAMES_PER_SERIES_OPTIONS)],
+            'rest_days' => 'required|integer|min:0|max:7',
+        ], [], [
+            'start_date' => 'fecha de inicio',
+            'rounds' => 'vueltas',
+            'games_per_series' => 'juegos por serie',
+            'rest_days' => 'días de descanso',
+        ]);
+    }
+
+    /**
+     * Partidos armados en la vista previa (con cambios manuales de equipos o fecha), con los mismos
+     * campos que genera RoundRobinScheduler.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function validateGames(Request $request, Tournament $tournament): array
+    {
+        $teamIds = $tournament->teams()->pluck('teams.id')->all();
+
+        $validated = $request->validate([
+            'games' => 'required|array|min:1|max:2000',
+            'games.*.round' => 'required|integer|min:1',
+            'games.*.matchday' => 'required|integer|min:1',
+            'games.*.series' => 'required|integer|min:1',
+            'games.*.series_game' => 'required|integer|min:1',
+            'games.*.game_number' => 'required|integer|min:1|distinct',
+            'games.*.away_team_id' => ['required', 'integer', Rule::in($teamIds)],
+            'games.*.home_team_id' => ['required', 'integer', Rule::in($teamIds), 'different:games.*.away_team_id'],
+            'games.*.scheduled_at' => 'required|date_format:Y-m-d H:i:s',
+        ], [
+            'games.*.home_team_id.different' => 'En el partido :position el equipo local debe ser distinto al visitante.',
+            'games.*.*.in' => 'Uno de los equipos del partido :position no está inscrito en el torneo.',
+            'games.*.game_number.distinct' => 'Hay números de partido repetidos.',
+        ], [
+            'games' => 'partidos',
+        ]);
+
+        return array_map(fn ($game) => [
+            'round' => (int) $game['round'],
+            'matchday' => (int) $game['matchday'],
+            'series' => (int) $game['series'],
+            'series_game' => (int) $game['series_game'],
+            'game_number' => (int) $game['game_number'],
+            'home_team_id' => (int) $game['home_team_id'],
+            'away_team_id' => (int) $game['away_team_id'],
+            'scheduled_at' => $game['scheduled_at'],
+        ], $validated['games']);
+    }
+
+    private function tournamentTeams(Tournament $tournament): Collection
+    {
+        return $tournament->teams()->get(['teams.id', 'teams.name', 'teams.short_name', 'teams.abbreviation'])->keyBy('id');
+    }
+
+    /**
+     * Agrega a cada partido sus equipos y calcula quién descansa en cada jornada,
+     * con la misma forma que index() y preview().
+     *
+     * @return array{games: list<array<string, mixed>>, byes: object}
+     */
+    private function hydrateSchedule(array $games, Collection $teams): array
+    {
+        $byes = [];
+        foreach (collect($games)->groupBy('matchday') as $matchday => $matchdayGames) {
+            $playing = $matchdayGames->pluck('home_team_id')->merge($matchdayGames->pluck('away_team_id'));
+            $resting = $teams->keys()->diff($playing)->first();
+            if ($resting !== null) {
+                $byes[$matchday] = $teams[$resting];
+            }
+        }
+
+        return [
+            'games' => array_map(fn ($game) => $game + [
+                'home_team' => $teams[$game['home_team_id']],
+                'away_team' => $teams[$game['away_team_id']],
+            ], $games),
+            'byes' => (object) $byes,
+        ];
     }
 
     // Con resultados capturados el calendario ya no se puede rehacer

@@ -261,9 +261,22 @@
                       variant="outlined"
                       class="text-none font-weight-bold rounded-pill"
                       :disabled="gamesStore.loading"
-                      @click="previewData = null"
+                      @click="discardPreview"
                     >
                       Descartar
+                    </v-btn>
+                    <v-btn
+                      v-if="previewData"
+                      color="primary"
+                      size="small"
+                      variant="outlined"
+                      class="text-none font-weight-bold rounded-pill"
+                      prepend-icon="mdi-content-save-edit-outline"
+                      :loading="isSavingDraft"
+                      :disabled="gamesStore.loading && !isSavingDraft"
+                      @click="saveDraft"
+                    >
+                      Guardar borrador
                     </v-btn>
                     <v-btn
                       v-if="previewData"
@@ -272,7 +285,8 @@
                       variant="flat"
                       class="text-none font-weight-bold rounded-pill px-4"
                       prepend-icon="mdi-content-save"
-                      :loading="gamesStore.loading"
+                      :loading="gamesStore.loading && !isSavingDraft"
+                      :disabled="isSavingDraft"
                       @click="saveCalendar"
                     >
                       Guardar calendario
@@ -310,17 +324,23 @@
               density="compact"
               class="mb-3 text-body-2"
             >
-              Vista previa con {{ options.games_per_series }} {{ options.games_per_series === 1 ? 'juego' : 'juegos' }} por serie. El calendario aún no se guarda: presiona <strong>Guardar calendario</strong> para confirmarlo.
+              Vista previa con {{ options.games_per_series }} {{ options.games_per_series === 1 ? 'juego' : 'juegos' }} por serie.
+              Puedes cambiar los equipos o la fecha de cada partido desde su menú.
+              El calendario aún no se guarda: presiona <strong>Guardar borrador</strong> para continuar después o <strong>Guardar calendario</strong> para confirmarlo.
+              <div v-if="draftSavedAt" class="mt-1 text-caption">
+                <template v-if="draftDirty">Hay cambios sin guardar en el borrador (guardado por última vez el {{ formatDateTime(draftSavedAt) }}).</template>
+                <template v-else>Borrador guardado el {{ formatDateTime(draftSavedAt) }}.</template>
+              </div>
             </v-alert>
 
             <TournamentSchedule
               :games="previewData ? previewData.games : gamesStore.games"
               :byes="previewData ? previewData.byes : gamesStore.byes"
-              :show-actions="!previewData"
+              show-actions
+              :show-boxscore="!previewData"
               @edit="editGame"
               @boxscore="openBoxscore"
               :loading="gamesStore.loading"
-              default-view="series"
             />
           </v-window-item>
         </v-window>
@@ -622,8 +642,17 @@ const options = ref({
   rest_days: 1
 })
 
-// Calendario calculado pero aún sin guardar
+// Calendario calculado pero aún sin guardar (puede venir de un borrador y tener cambios manuales)
 const previewData = ref(null)
+// Hay partidos editados a mano en la vista previa: recalcularla los pierde
+const previewEdited = ref(false)
+// Fecha del borrador guardado en el servidor (null si no hay) y si la vista previa cambió desde entonces
+const draftSavedAt = ref(null)
+const draftDirty = ref(false)
+const isSavingDraft = ref(false)
+
+// '2026-11-19 14:30:00' -> 'jue, 19 nov a las 14:30'
+const formatDateTime = value => `${formatDate(value)} a las ${String(value).substring(11, 16)}`
 
 // Al cambiar los juegos por serie se calcula la vista previa; con otros parámetros
 // se recalcula solo si ya había una. Se activa hasta cargar los datos del torneo.
@@ -665,22 +694,85 @@ const preview = computed(() => {
 
 const previewCalendar = async () => {
   try {
+    const hadEdits = previewEdited.value
     previewData.value = await gamesStore.preview(props.id, options.value)
+    previewEdited.value = false
+    draftDirty.value = true
+    if (hadEdits) notify.warning('Se recalculó la vista previa con los nuevos parámetros; se perdieron los cambios manuales a los partidos.')
   } catch (error) {
     notify.error(getErrorMessage(error, 'Ocurrió un error al generar el calendario'))
   }
 }
 
-// Guarda el calendario y deja en el torneo los juegos por serie elegidos
+// Guarda el calendario tal como está en la vista previa (con sus cambios) y deja en el torneo
+// los juegos por serie elegidos; el borrador se descarta
 const saveCalendar = async () => {
   try {
-    await gamesStore.generate(props.id, options.value)
+    await gamesStore.generate(props.id, options.value, previewData.value.games)
     tournament.value = { ...tournament.value, games_per_series: options.value.games_per_series }
     previewData.value = null
+    previewEdited.value = false
+    draftSavedAt.value = null
+    draftDirty.value = false
     notify.success('Calendario guardado correctamente')
   } catch (error) {
     notify.error(getErrorMessage(error, 'Ocurrió un error al guardar el calendario'))
   }
+}
+
+// Guarda la vista previa como borrador para continuar después
+const saveDraft = async () => {
+  isSavingDraft.value = true
+  try {
+    const draft = await gamesStore.saveDraft(props.id, options.value, previewData.value.games)
+    draftSavedAt.value = draft?.saved_at ?? null
+    draftDirty.value = false
+    notify.success('Borrador guardado correctamente')
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al guardar el borrador'))
+  } finally {
+    isSavingDraft.value = false
+  }
+}
+
+// Sin borrador guardado solo se cierra la vista previa; con borrador se pide confirmación para borrarlo
+const discardPreview = () => {
+  if (draftSavedAt.value) {
+    confirmAction.value = 'discardDraft'
+    return
+  }
+  previewData.value = null
+  previewEdited.value = false
+}
+
+// Recupera el borrador guardado (si hay y el torneo aún no tiene calendario)
+const loadDraft = async () => {
+  try {
+    const draft = await gamesStore.fetchDraft(props.id)
+    if (!draft) return
+    options.value = { ...draft.options }
+    previewData.value = { games: draft.games, byes: draft.byes }
+    previewEdited.value = true
+    draftSavedAt.value = draft.saved_at
+    draftDirty.value = false
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al cargar el borrador del calendario'))
+  }
+}
+
+// Equipo que descansa en cada jornada: el inscrito que no juega ningún partido de ella
+const computeByes = (games) => {
+  const byes = {}
+  const playing = {}
+  for (const game of games) {
+    playing[game.matchday] ??= new Set()
+    playing[game.matchday].add(game.home_team_id).add(game.away_team_id)
+  }
+  for (const [matchday, teamIds] of Object.entries(playing)) {
+    const resting = teamsStore.teams.find(team => !teamIds.has(team.id))
+    if (resting) byes[matchday] = resting
+  }
+  return byes
 }
 
 // Parámetros con que se guardó el calendario, como etiquetas
@@ -767,7 +859,29 @@ const editGame = (item) => {
   showGameModal.value = true
 }
 
+// En la vista previa el cambio solo se aplica en pantalla; se guarda con el borrador o el calendario
+const updatePreviewGame = (data) => {
+  const team = id => teamsStore.teams.find(item => item.id === id)
+  const games = previewData.value.games.map(game => game.game_number !== gameToEdit.value.game_number ? game : {
+    ...game,
+    away_team_id: data.away_team_id,
+    home_team_id: data.home_team_id,
+    away_team: team(data.away_team_id),
+    home_team: team(data.home_team_id),
+    scheduled_at: `${data.scheduled_at}:00`
+  })
+  previewData.value = { games, byes: computeByes(games) }
+  previewEdited.value = true
+  draftDirty.value = true
+  showGameModal.value = false
+  notify.success('Partido actualizado en la vista previa')
+}
+
 const saveGame = async (data) => {
+  if (previewData.value) {
+    updatePreviewGame(data)
+    return
+  }
   isSavingGame.value = true
   try {
     await gamesStore.updateGame(props.id, gameToEdit.value.id, data)
@@ -833,6 +947,11 @@ const confirmTexts = computed(() => ({
     title: 'Eliminar calendario',
     message: '¿Seguro que deseas eliminar el calendario completo del torneo? Esta acción no se puede deshacer.',
     button: 'Eliminar'
+  },
+  discardDraft: {
+    title: 'Descartar borrador',
+    message: '¿Seguro que deseas descartar la vista previa y eliminar el borrador guardado del calendario? Se perderán los cambios a los partidos.',
+    button: 'Descartar'
   }
 }))
 
@@ -845,6 +964,13 @@ const runConfirmAction = async () => {
     } else if (confirmAction.value === 'clear') {
       await gamesStore.clear(props.id)
       notify.success('Calendario eliminado correctamente')
+    } else if (confirmAction.value === 'discardDraft') {
+      await gamesStore.discardDraft(props.id)
+      previewData.value = null
+      previewEdited.value = false
+      draftSavedAt.value = null
+      draftDirty.value = false
+      notify.success('Borrador descartado')
     }
     confirmAction.value = null
   } catch (error) {
@@ -875,6 +1001,8 @@ onMounted(async () => {
     initialLoading.value = false
   }
   syncOptionsFromGames()
+  // Sin calendario guardado se retoma el borrador, antes de vigilar los parámetros para no recalcularlo
+  if (!hasCalendar.value) await loadDraft()
   watchOptions()
 })
 </script>
