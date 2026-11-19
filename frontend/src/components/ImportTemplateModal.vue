@@ -133,6 +133,21 @@
             />
           </div>
 
+          <!-- Opciones de la carga (p. ej. omitir validaciones); al cambiarlas se recalcula la vista previa -->
+          <v-checkbox
+            v-for="option in options"
+            :key="option.key"
+            v-model="optionValues[option.key]"
+            :label="option.label"
+            :hint="option.hint"
+            :persistent-hint="!!option.hint"
+            :disabled="loading"
+            color="primary"
+            density="compact"
+            class="mb-3"
+            @update:model-value="refreshPreview(option.key)"
+          />
+
           <v-alert v-if="counts.skip" type="warning" variant="tonal" density="compact" class="text-body-2 mb-3">
             Las filas con errores no se guardarán ni actualizarán; el resto sí.
           </v-alert>
@@ -206,11 +221,13 @@ const props = defineProps({
   // Encabezados que debe traer el archivo y una fila de ejemplo
   columns: Array,
   example: Array,
-  // Función async que recibe el File y regresa { message, created, updated, errors }
+  // Función async que recibe el File y los valores de las opciones, y regresa { message, created, updated, errors }
   importer: Function,
-  // Opcional: función async que recibe el File y regresa { rows: [{ row, data, player_id, action, errors }] }
+  // Opcional: función async que recibe el File y los valores de las opciones, y regresa { rows: [{ row, data, player_id, action, errors }] }
   // para mostrar la vista previa antes de importar; previewHeaders son las columnas de "data"
   previewer: Function,
+  // Opcional: casillas que se envían con el archivo, [{ key, label, hint? }] (todas inician en false)
+  options: { type: Array, default: () => [] },
   previewHeaders: { type: Array, default: () => [] },
   // Opcional: texto bajo el título de la vista previa (p. ej. el equipo del roster)
   previewSubtitle: String,
@@ -241,6 +258,7 @@ const notify = useNotificationsStore()
 const file = ref(null)
 const result = ref(null)
 const errorMessage = ref('')
+const optionValues = ref(Object.fromEntries(props.options.map(option => [option.key, false])))
 
 const dialog = computed({
   get: () => props.modelValue,
@@ -267,7 +285,6 @@ const normalize = (text) => String(text ?? '').normalize('NFD').replace(/\p{Diac
 const matchesSearch = (value, query) => normalize(value).includes(normalize(query).trim())
 
 const tableHeaders = computed(() => [
-  { title: 'Fila', key: 'row', width: 60 },
   ...props.previewHeaders,
   { title: 'ID', key: 'player_id', width: 70 },
   { title: 'Estado', key: 'action', width: 120 },
@@ -282,15 +299,30 @@ const counts = computed(() => {
 
 const filteredRows = computed(() => previewRows.value.filter(item => !actionFilter.value || item.action === actionFilter.value))
 
+// Pide al backend qué pasaría con cada fila según el archivo y las opciones marcadas
+const loadPreview = async () => {
+  const { rows } = await props.previewer(selectedFile(), { ...optionValues.value })
+  previewRows.value = rows.map(({ data, ...item }) => ({ ...data, ...item }))
+  actionFilter.value = null
+}
+
+// Una opción cambió dentro de la vista previa; si falla se regresa la casilla a como estaba
+const refreshPreview = async (key) => {
+  try {
+    await loadPreview()
+  } catch (error) {
+    optionValues.value[key] = !optionValues.value[key]
+    notify.error(getErrorMessage(error, 'Ocurrió un error al actualizar la vista previa.'))
+  }
+}
+
 const handlePreview = async () => {
   if (!file.value) return
   errorMessage.value = ''
   result.value = null
 
   try {
-    const { rows } = await props.previewer(selectedFile())
-    previewRows.value = rows.map(({ data, ...item }) => ({ ...data, ...item }))
-    actionFilter.value = null
+    await loadPreview()
     search.value = ''
     showPreview.value = true
   } catch (error) {
@@ -305,7 +337,7 @@ const handleImport = async () => {
   result.value = null
 
   try {
-    result.value = await props.importer(selectedFile())
+    result.value = await props.importer(selectedFile(), { ...optionValues.value })
     showPreview.value = false
     emit('imported', result.value)
     if (result.value.errors.length) notify.warning(`${result.value.message} Revisa las filas con errores.`)

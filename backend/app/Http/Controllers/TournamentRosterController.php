@@ -75,23 +75,26 @@ class TournamentRosterController extends Controller
     }
 
     /**
-     * Vista previa de la carga del roster desde Excel/CSV: solo se lee la columna CURP
-     * (las demás se ignoran, así sirve también la plantilla o el export de jugadores).
+     * Vista previa de la carga del roster desde Excel/CSV (la plantilla de jugadores): el jugador se busca por CURP o,
+     * con match_by_name, por nombre completo (APELLIDO1, APELLIDO2 y NOMBRE, o NOMBRE_COMPLETO). Sirve también
+     * el export de jugadores; las demás columnas se ignoran.
      */
     public function previewImport(Request $request, Tournament $tournament, Team $team)
     {
         $tournamentTeamId = $this->rosterOwner($tournament, $team);
-        $rows = $this->readSpreadsheet($request, ['CURP' => 'curp']);
+        $byName = $request->boolean('match_by_name');
+        $rows = $this->readRosterSpreadsheet($request);
 
-        return response()->json(['rows' => $this->analyzeImport($rows, $tournament, $tournamentTeamId)]);
+        return response()->json(['rows' => $this->analyzeImport($rows, $tournament, $tournamentTeamId, $byName)]);
     }
 
     // Agrega al roster los jugadores válidos del archivo; las filas con errores se omiten
     public function import(Request $request, Tournament $tournament, Team $team)
     {
         $tournamentTeamId = $this->rosterOwner($tournament, $team);
-        $rows = $this->readSpreadsheet($request, ['CURP' => 'curp']);
-        $analysis = $this->analyzeImport($rows, $tournament, $tournamentTeamId);
+        $byName = $request->boolean('match_by_name');
+        $rows = $this->readRosterSpreadsheet($request);
+        $analysis = $this->analyzeImport($rows, $tournament, $tournamentTeamId, $byName);
 
         $created = 0;
         $errors = [];
@@ -123,19 +126,57 @@ class TournamentRosterController extends Controller
     }
 
     /**
-     * Busca cada CURP entre los jugadores del propietario del torneo y decide: create (se agrega),
-     * unchanged (ya está en este roster) o skip (con errores).
+     * Acepta la plantilla de jugadores (APELLIDO1 | APELLIDO2 | NOMBRE | CURP | ...) o NOMBRE_COMPLETO | CURP.
+     * Todas las columnas son opcionales: a la fila que no trae lo necesario (CURP, o el nombre al buscar
+     * por nombre) se le marca el error en la vista previa. El nombre completo es "NOMBRE APELLIDO1 APELLIDO2"
+     * o, si viene, NOMBRE_COMPLETO.
+     */
+    private function readRosterSpreadsheet(Request $request): array
+    {
+        $rows = $this->readSpreadsheet($request, [], [
+            'CURP' => 'curp',
+            'NOMBRE_COMPLETO' => 'full_name',
+            'NOMBRE' => 'first_name',
+            'APELLIDO1' => 'last_name',
+            'APELLIDO2' => 'second_last_name',
+        ]);
+
+        return array_map(fn ($row) => [
+            'curp' => $row['curp'],
+            'name' => trim((string) $row['full_name']) !== ''
+                ? $row['full_name']
+                : Str::squish(implode(' ', [$row['first_name'], $row['last_name'], $row['second_last_name']])),
+        ], $rows);
+    }
+
+    /**
+     * Busca a cada jugador entre los del propietario del torneo, por CURP o por nombre completo,
+     * y decide: create (se agrega), unchanged (ya está en este roster) o skip (con errores).
      *
      * @return list<array{row: int|string, data: array, player_id: ?int, action: string, errors: string[]}>
      */
-    private function analyzeImport(array $rows, Tournament $tournament, int $tournamentTeamId): array
+    private function analyzeImport(array $rows, Tournament $tournament, int $tournamentTeamId, bool $byName = false): array
     {
-        $curps = collect($rows)->map(fn ($row) => Str::upper(trim((string) $row['curp'])))->unique();
+        $columns = ['id', 'first_name', 'last_name', 'second_last_name', 'curp', 'is_active'];
+        $byFullName = [];
+        $byCurp = collect();
 
-        $players = Player::ownedBy($tournament->user_id)
-            ->whereIn('curp', $curps)
-            ->get(['id', 'first_name', 'last_name', 'second_last_name', 'curp', 'is_active'])
-            ->keyBy(fn ($player) => Str::upper($player->curp));
+        if ($byName) {
+            // Cada jugador queda bajo "nombre apellido1 apellido2" y "apellido1 apellido2 nombre"
+            $players = Player::ownedBy($tournament->user_id)->get($columns);
+            foreach ($players as $player) {
+                foreach ([
+                    [$player->first_name, $player->last_name, $player->second_last_name],
+                    [$player->last_name, $player->second_last_name, $player->first_name],
+                ] as $parts) {
+                    $byFullName[$this->normalizeName(implode(' ', $parts))][$player->id] = $player;
+                }
+            }
+        } else {
+            $curps = collect($rows)->map(fn ($row) => Str::upper(trim((string) $row['curp'])))->unique();
+            $players = Player::ownedBy($tournament->user_id)->whereIn('curp', $curps)->get($columns);
+            $byCurp = $players->keyBy(fn ($player) => Str::upper($player->curp));
+        }
 
         // Equipo del torneo en cuyo roster está ya cada jugador
         $rostered = DB::table('tournament_roster_players')
@@ -147,22 +188,42 @@ class TournamentRosterController extends Controller
             ->keyBy('player_id');
 
         $result = [];
-        $seenCurps = [];
+        $seen = [];
 
         foreach ($rows as $rowNumber => $row) {
             $curp = Str::upper(trim((string) $row['curp']));
-            $player = $players->get($curp);
+            $name = trim((string) $row['name']);
             $errors = [];
             $action = 'create';
+            $player = null;
 
-            // readSpreadsheet ya omite las filas sin CURP
-            if (isset($seenCurps[$curp])) {
-                $errors[] = "CURP repetida en el archivo (fila {$seenCurps[$curp]}).";
-            } elseif (! $player) {
-                $errors[] = 'No existe un jugador con esta CURP en tu catálogo.';
-            } elseif (! $player->is_active) {
+            if ($byName) {
+                $matches = $byFullName[$this->normalizeName($name)] ?? [];
+                if ($name === '') {
+                    $errors[] = 'Falta el nombre (NOMBRE y APELLIDO1).';
+                } elseif (! $matches) {
+                    $errors[] = 'No existe un jugador con este nombre completo en tu catálogo.';
+                } elseif (count($matches) > 1) {
+                    $errors[] = 'Hay ' . count($matches) . ' jugadores con este nombre en tu catálogo (#' . implode(', #', array_keys($matches)) . '); usa la CURP para distinguirlos.';
+                } else {
+                    $player = reset($matches);
+                }
+            } else {
+                $player = $byCurp->get($curp);
+                if ($curp === '') {
+                    $errors[] = 'Falta la CURP.';
+                } elseif (! $player) {
+                    $errors[] = 'No existe un jugador con esta CURP en tu catálogo.';
+                }
+            }
+
+            // Repetido en el archivo: la misma CURP o, por nombre, el mismo jugador
+            $key = $byName ? ($player ? "id:{$player->id}" : null) : ($curp !== '' ? $curp : null);
+            if ($key !== null && isset($seen[$key])) {
+                $errors = [($byName ? 'Jugador repetido' : 'CURP repetida') . " en el archivo (fila {$seen[$key]})."];
+            } elseif ($player && ! $player->is_active) {
                 $errors[] = 'El jugador está inactivo.';
-            } elseif ($roster = $rostered->get($player->id)) {
+            } elseif ($player && ($roster = $rostered->get($player->id))) {
                 if ((int) $roster->tournament_team_id === $tournamentTeamId) {
                     $action = 'unchanged';
                 } else {
@@ -170,13 +231,15 @@ class TournamentRosterController extends Controller
                 }
             }
 
-            $seenCurps[$curp] ??= $rowNumber;
+            if ($key !== null) {
+                $seen[$key] ??= $rowNumber;
+            }
 
             $result[] = [
                 'row' => $rowNumber,
                 'data' => [
-                    'curp' => $curp,
-                    'name' => $player ? collect([$player->first_name, $player->last_name, $player->second_last_name])->filter()->implode(' ') : null,
+                    'curp' => $player?->curp ?? ($curp ?: null),
+                    'name' => $player ? collect([$player->first_name, $player->last_name, $player->second_last_name])->filter()->implode(' ') : ($name ?: null),
                 ],
                 'player_id' => $player?->id,
                 'action' => $errors ? 'skip' : $action,
@@ -185,6 +248,12 @@ class TournamentRosterController extends Controller
         }
 
         return $result;
+    }
+
+    // "  José  PÉREZ lópez " -> "jose perez lopez"
+    private function normalizeName(string $name): string
+    {
+        return Str::of($name)->ascii()->lower()->squish()->toString();
     }
 
     private function payload(Tournament $tournament, Team $team): array

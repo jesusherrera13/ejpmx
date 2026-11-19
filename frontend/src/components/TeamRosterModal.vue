@@ -142,19 +142,20 @@
       </v-card-actions>
     </v-card>
 
-    <!-- Carga del roster por Excel: se identifica a cada jugador por su CURP -->
+    <!-- Carga del roster por Excel: se identifica a cada jugador por su CURP (o por su nombre completo) -->
     <ImportTemplateModal
       v-if="showImport"
       v-model="showImport"
       :title="`Cargar roster de ${team?.name}`"
-      hint="El jugador se identifica por su CURP; el nombre es solo de referencia. Cada CURP debe pertenecer a uno de tus jugadores activos que no esté en el roster de otro equipo de este torneo. Antes de guardar verás una vista previa."
-      :columns="['NOMBRE_COMPLETO', 'CURP']"
-      :example="['Juan Pérez López', 'PELJ100515HDFRPNA4']"
+      hint="Es la misma plantilla de jugadores. El jugador se identifica por su CURP; las demás columnas son de referencia. Cada CURP debe pertenecer a uno de tus jugadores activos que no esté en el roster de otro equipo de este torneo. Antes de guardar verás una vista previa, donde puedes elegir identificarlos por su nombre completo (NOMBRE, APELLIDO1 y APELLIDO2)."
+      :columns="['APELLIDO1', 'APELLIDO2', 'NOMBRE', 'CURP', 'FECHA_DE_NACIMIENTO', 'EQUIPO']"
+      :example="['Pérez', 'López', 'Juan', 'PELJ100515HDFRPNA4', '15/05/2010', team?.name ?? '']"
       :importer="importFile"
       :previewer="previewFile"
       :preview-headers="importPreviewHeaders"
       :preview-subtitle="`Roster de ${team?.name}`"
       :action-labels="importActionLabels"
+      :options="importOptions"
       :loading="importing"
       @imported="apply"
     />
@@ -266,8 +267,16 @@ const withImporting = async (request) => {
   }
 }
 
-const previewFile = file => withImporting(() => teamsStore.previewRosterFile(props.tournamentId, props.team.id, file))
-const importFile = file => withImporting(() => teamsStore.importRosterFile(props.tournamentId, props.team.id, file))
+const importOptions = [
+  {
+    key: 'match_by_name',
+    label: 'Omitir validación de CURP e identificar por nombre completo',
+    hint: 'Busca a cada jugador por NOMBRE, APELLIDO1 y APELLIDO2, sin importar acentos ni mayúsculas. Si hay dos jugadores con el mismo nombre, la fila se omite.'
+  }
+]
+
+const previewFile = (file, options) => withImporting(() => teamsStore.previewRosterFile(props.tournamentId, props.team.id, file, options))
+const importFile = (file, options) => withImporting(() => teamsStore.importRosterFile(props.tournamentId, props.team.id, file, options))
 
 const removePlayer = async (player) => {
   if (saving.value) return

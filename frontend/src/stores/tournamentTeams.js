@@ -3,6 +3,7 @@
 import { defineStore } from 'pinia'
 import axiosClient from '@/axios'
 import { downloadFile } from '@/utils/download'
+import { appendImportOptions } from '@/utils/importOptions'
 
 export const useTournamentTeamsStore = defineStore('tournamentTeams', {
   state: () => ({
@@ -65,18 +66,21 @@ export const useTournamentTeamsStore = defineStore('tournamentTeams', {
       return response.data
     },
 
-    // Vista previa de la carga del roster por Excel (columna CURP): { rows: [{ row, data, player_id, action, errors }] }
-    async previewRosterFile(tournamentId, teamId, file) {
+    // Vista previa de la carga del roster por Excel: { rows: [{ row, data, player_id, action, errors }] }
+    // Busca por la columna CURP o, con options.match_by_name, por NOMBRE_COMPLETO
+    async previewRosterFile(tournamentId, teamId, file, options = {}) {
       const formData = new FormData()
       formData.append('file', file)
+      appendImportOptions(formData, options)
       const response = await axiosClient.post(`/tournaments/${tournamentId}/teams/${teamId}/players/import/preview`, formData)
       return response.data
     },
 
     // Agrega al roster los jugadores del archivo: { message, created, errors, roster, available }
-    async importRosterFile(tournamentId, teamId, file) {
+    async importRosterFile(tournamentId, teamId, file, options = {}) {
       const formData = new FormData()
       formData.append('file', file)
+      appendImportOptions(formData, options)
       const response = await axiosClient.post(`/tournaments/${tournamentId}/teams/${teamId}/players/import`, formData)
       this.setRosterCount(teamId, response.data.roster.length)
       return response.data

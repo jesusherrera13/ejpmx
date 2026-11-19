@@ -2,6 +2,7 @@
 import { defineStore } from 'pinia'
 import axiosClient from '@/axios'
 import { downloadFile } from '@/utils/download'
+import { appendImportOptions } from '@/utils/importOptions'
 
 export const usePlayersStore = defineStore('players', {
   state: () => ({
@@ -76,11 +77,13 @@ export const usePlayersStore = defineStore('players', {
     },
 
     // Vista previa del Excel sin guardar: { rows: [{ row, data, player_id, action, errors }] }
-    async previewFile(file) {
+    // options: { skip_identity_validation } para aceptar filas sin CURP o fecha de nacimiento
+    async previewFile(file, options = {}) {
       this.loading = true
       try {
         const formData = new FormData()
         formData.append('file', file)
+        appendImportOptions(formData, options)
         const response = await axiosClient.post('/players/import/preview', formData)
         return response.data
       } catch (err) {
@@ -92,11 +95,12 @@ export const usePlayersStore = defineStore('players', {
     },
 
     // Sube un Excel (APELLIDO1 | APELLIDO2 | NOMBRE | CURP | FECHA_DE_NACIMIENTO | EQUIPO, todas las hojas); crea o actualiza por CURP
-    async importFile(file) {
+    async importFile(file, options = {}) {
       this.loading = true
       try {
         const formData = new FormData()
         formData.append('file', file)
+        appendImportOptions(formData, options)
         const response = await axiosClient.post('/players/import', formData)
         await this.fetchPlayers()
         return response.data

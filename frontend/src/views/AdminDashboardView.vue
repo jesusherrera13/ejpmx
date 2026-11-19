@@ -593,6 +593,7 @@
       :importer="currentImport.store.importFile"
       :previewer="currentImport.store.previewFile"
       :preview-headers="currentImport.previewHeaders"
+      :options="currentImport.options"
       :loading="currentImport.store.loading"
       @imported="totalItems = currentImport.count()"
     />
@@ -673,6 +674,18 @@
       :loading="blogStore.loading"
       @save="handleSaveBlog"
     />
+
+    <!-- Bloquea la pantalla mientras se descarga la plantilla -->
+    <v-overlay
+      class="align-center justify-center"
+      :model-value="isDownloadingTemplate"
+      persistent
+    >
+      <div class="d-flex flex-column align-center">
+        <v-progress-circular color="primary" indeterminate size="56" width="4" />
+        <div class="mt-3 font-weight-bold text-white">Descargando plantilla...</div>
+      </div>
+    </v-overlay>
 
   </v-app>
 </template>
@@ -1275,7 +1288,14 @@ const importConfigs = {
   jugadores: {
     store: playersStore,
     title: 'Cargar Plantilla de Jugadores',
-    hint: 'Si la CURP ya existe, el jugador se actualizará. Fecha en formato dd/mm/aaaa; EQUIPO es opcional. Se leen todas las hojas del libro. Antes de guardar verás una vista previa; las filas cuya CURP no coincida con el nombre o la fecha se omitirán.',
+    hint: 'CURP y FECHA_DE_NACIMIENTO son obligatorias (fecha en formato dd/mm/aaaa); EQUIPO es opcional. Si la CURP ya existe, el jugador se actualizará. Se leen todas las hojas del libro. Antes de guardar verás una vista previa; las filas cuya CURP no coincida con el nombre o la fecha se omitirán.',
+    options: [
+      {
+        key: 'skip_identity_validation',
+        label: 'Omitir validación de CURP y fecha de nacimiento obligatorias',
+        hint: 'Permite cargar jugadores sin CURP o sin fecha de nacimiento. Si vienen, se siguen validando. Al cambiarla se actualiza la vista previa.'
+      }
+    ],
     columns: ['APELLIDO1', 'APELLIDO2', 'NOMBRE', 'CURP', 'FECHA_DE_NACIMIENTO', 'EQUIPO'],
     example: ['Pérez', 'López', 'Juan', 'PELJ100515HDFRPNA4', '15/05/2010', 'SAN FRANCISCO GIANTS'],
     // Columnas de la vista previa (campos de cada fila que regresa previewFile)
@@ -1345,12 +1365,17 @@ const confirmDelete = async () => {
 }
 
 // DESCARGAR PLANTILLA DEL MÓDULO ACTIVO
+const isDownloadingTemplate = ref(false)
 const handleDownloadTemplate = async () => {
+  if (isDownloadingTemplate.value) return
+  isDownloadingTemplate.value = true
   try {
     await currentImport.value.store.downloadTemplate()
     notify.success('Plantilla descargada')
   } catch (error) {
     notify.error('Ocurrió un error al descargar la plantilla')
+  } finally {
+    isDownloadingTemplate.value = false
   }
 }
 

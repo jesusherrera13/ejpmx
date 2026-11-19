@@ -90,12 +90,13 @@ class PlayerController extends Controller
     {
         $rows = $this->readSpreadsheet($request, self::IMPORT_HEADERS, self::OPTIONAL_HEADERS);
 
-        return response()->json(['rows' => $this->analyzeImport($rows, $request->user()->id)]);
+        return response()->json(['rows' => $this->analyzeImport($rows, $request->user()->id, $this->requiresIdentity($request))]);
     }
 
     /**
      * Importa jugadores desde un archivo Excel/CSV con encabezados:
      * APELLIDO1 | APELLIDO2 | NOMBRE | CURP | FECHA_DE_NACIMIENTO | EQUIPO (opcional), en una o varias hojas.
+     * CURP y fecha de nacimiento son obligatorias, salvo que se envíe skip_identity_validation.
      * Si la CURP ya existe se actualiza el jugador; sin CURP, se busca por nombre completo y fecha de nacimiento.
      * Las filas que no pasan las validaciones (incluida la CURP contra nombre y fecha) se omiten.
      */
@@ -103,7 +104,7 @@ class PlayerController extends Controller
     {
         $rows = $this->readSpreadsheet($request, self::IMPORT_HEADERS, self::OPTIONAL_HEADERS);
         $userId = $request->user()->id;
-        $analysis = $this->analyzeImport($rows, $userId);
+        $analysis = $this->analyzeImport($rows, $userId, $this->requiresIdentity($request));
 
         $created = 0;
         $updated = 0;
@@ -134,7 +135,7 @@ class PlayerController extends Controller
      *
      * @return list<array{row: int|string, data: array, team: ?string, player_id: ?int, action: string, errors: string[]}>
      */
-    private function analyzeImport(array $rows, int $userId): array
+    private function analyzeImport(array $rows, int $userId, bool $requireIdentity = true): array
     {
         $result = [];
         $seenCurps = [];
@@ -154,8 +155,9 @@ class PlayerController extends Controller
                 'last_name' => 'required|string|max:100',
                 'second_last_name' => 'nullable|string|max:100',
                 'first_name' => 'required|string|max:100',
-                'curp' => 'nullable|alpha_num|size:18',
-                'birthdate' => 'nullable|date|before_or_equal:today',
+                'curp' => [$requireIdentity ? 'required' : 'nullable', 'alpha_num', 'size:18'],
+                // Si había un valor que no se pudo interpretar ya se reporta abajo; no se marca además como faltante
+                'birthdate' => [$requireIdentity && $birthdate !== false ? 'required' : 'nullable', 'date', 'before_or_equal:today'],
             ], [], [
                 'last_name' => 'Apellido 1',
                 'second_last_name' => 'Apellido 2',
@@ -203,6 +205,12 @@ class PlayerController extends Controller
         }
 
         return $result;
+    }
+
+    // La casilla "Omitir validación de CURP y fecha" de la carga permite filas sin esos datos
+    private function requiresIdentity(Request $request): bool
+    {
+        return ! $request->boolean('skip_identity_validation');
     }
 
     /**
