@@ -31,5 +31,7 @@ class DatabaseSeeder extends Seeder
 
         ContentType::firstOrCreate(['name' => 'Artículo', 'slug' => 'article']);
         ContentType::firstOrCreate(['name' => 'Video', 'slug' => 'video']);
+
+        $this->call(FieldingPositionSeeder::class);
     }
 }

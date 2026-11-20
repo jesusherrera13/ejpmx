@@ -63,11 +63,32 @@
                 item-value="id"
                 class="admin-data-table roster-table bg-white"
                 density="compact"
-                @dblclick:row="(event, { item }) => removePlayer(item)"
                 no-data-text="Aún no hay jugadores en el roster. Agrégalos desde la tabla de disponibles."
               >
                 <template v-slot:item.name="{ item }">
                   <span class="font-weight-bold text-black">{{ fullName(item) }}</span>
+                </template>
+                <template v-slot:item.fielding_position_id="{ item }">
+                  <v-select
+                    :model-value="item.fielding_position_id"
+                    :items="positions"
+                    item-title="code"
+                    item-value="id"
+                    placeholder="—"
+                    variant="outlined"
+                    density="compact"
+                    hide-details
+                    clearable
+                    class="position-select"
+                    :loading="savingPositionId === item.id"
+                    :disabled="saving"
+                    @update:model-value="value => updatePosition(item, value)"
+                  >
+                    <!-- Vuetify 4: item es el objeto del catálogo tal cual -->
+                    <template v-slot:item="{ props: itemProps, item: option }">
+                      <v-list-item v-bind="itemProps" :title="option.code" :subtitle="option.name" density="compact" />
+                    </template>
+                  </v-select>
                 </template>
                 <template v-slot:item.actions="{ item }">
                   <v-btn
@@ -108,7 +129,6 @@
                 item-value="id"
                 class="admin-data-table roster-table bg-white"
                 density="compact"
-                @dblclick:row="(event, { item }) => addPlayer(item)"
                 no-data-text="No hay jugadores disponibles: todos están en algún roster de este torneo o inactivos."
               >
                 <template v-slot:item.name="{ item }">
@@ -129,7 +149,7 @@
             </v-card>
             <div class="text-caption text-grey-darken-1 mt-2">
               Se muestran tus jugadores activos que no están en el roster de ningún equipo de este torneo.
-              Doble clic en un jugador para agregarlo o quitarlo del roster.
+              Usa las flechas para agregar o quitar a un jugador del roster.
             </div>
           </v-col>
         </v-row>
@@ -196,6 +216,7 @@ const importing = ref(false)
 // La búsqueda de la tabla usa el nombre completo y la CURP
 const rosterHeaders = [
   { title: 'Jugador', key: 'name', value: item => fullName(item) },
+  { title: 'Posición', key: 'fielding_position_id', sortable: false, width: 120 },
   { title: 'CURP', key: 'curp' },
   { title: '', key: 'actions', align: 'end', sortable: false }
 ]
@@ -226,7 +247,11 @@ watch(() => [props.modelValue, props.team?.id], async ([open]) => {
   search.value = ''
   loading.value = true
   try {
-    apply(await teamsStore.fetchRoster(props.tournamentId, props.team.id))
+    const [data] = await Promise.all([
+      teamsStore.fetchRoster(props.tournamentId, props.team.id),
+      teamsStore.fetchFieldingPositions()
+    ])
+    apply(data)
   } catch (error) {
     notify.error(getErrorMessage(error, 'Ocurrió un error al cargar el roster'))
   } finally {
@@ -278,6 +303,25 @@ const importOptions = [
 const previewFile = (file, options) => withImporting(() => teamsStore.previewRosterFile(props.tournamentId, props.team.id, file, options))
 const importFile = (file, options) => withImporting(() => teamsStore.importRosterFile(props.tournamentId, props.team.id, file, options))
 
+// Catálogo de posiciones para el combo; se carga al abrir el modal
+const positions = computed(() => teamsStore.fieldingPositions)
+const savingPositionId = ref(null)
+
+// Se guarda al elegir; si falla, el renglón conserva la posición anterior
+const updatePosition = async (player, positionId) => {
+  const previous = player.fielding_position_id
+  player.fielding_position_id = positionId ?? null
+  savingPositionId.value = player.id
+  try {
+    await teamsStore.updateRosterPosition(props.tournamentId, props.team.id, player.id, positionId ?? null)
+  } catch (error) {
+    player.fielding_position_id = previous
+    notify.error(getErrorMessage(error, 'Ocurrió un error al guardar la posición'))
+  } finally {
+    savingPositionId.value = null
+  }
+}
+
 const removePlayer = async (player) => {
   if (saving.value) return
   saving.value = true
@@ -296,10 +340,20 @@ const removePlayer = async (player) => {
   font-size: 0.6rem !important;
 }
 
-/* Doble clic agrega/quita: evita que el doble clic seleccione texto */
-.roster-table :deep(tbody .v-data-table__tr) {
-  cursor: pointer;
-  user-select: none;
+/* Combo de posición compacto dentro del renglón */
+.position-select {
+  min-width: 96px;
+}
+
+.position-select :deep(.v-field) {
+  font-size: 0.8125rem;
+  --v-input-control-height: 28px;
+}
+
+.position-select :deep(.v-field__input) {
+  min-height: 28px;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 /* Mismo estilo que las tablas de catálogos del panel */

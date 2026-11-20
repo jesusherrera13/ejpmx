@@ -8,6 +8,7 @@ import { appendImportOptions } from '@/utils/importOptions'
 export const useTournamentTeamsStore = defineStore('tournamentTeams', {
   state: () => ({
     teams: [],
+    fieldingPositions: [],
     loading: false,
     error: null
   }),
@@ -60,6 +61,21 @@ export const useTournamentTeamsStore = defineStore('tournamentTeams', {
       return response.data
     },
 
+    // Posición del jugador en el roster (null la quita): { player_id, fielding_position_id }
+    async updateRosterPosition(tournamentId, teamId, playerId, fieldingPositionId) {
+      const response = await axiosClient.put(`/tournaments/${tournamentId}/teams/${teamId}/players/${playerId}`, { fielding_position_id: fieldingPositionId })
+      return response.data
+    },
+
+    // Catálogo de posiciones (P, C, 1B... DH, MGR, CH, BAT, STF); se pide una vez
+    async fetchFieldingPositions() {
+      if (!this.fieldingPositions.length) {
+        const response = await axiosClient.get('/fielding-positions')
+        this.fieldingPositions = response.data
+      }
+      return this.fieldingPositions
+    },
+
     async removeRosterPlayer(tournamentId, teamId, playerId) {
       const response = await axiosClient.delete(`/tournaments/${tournamentId}/teams/${teamId}/players/${playerId}`)
       this.setRosterCount(teamId, response.data.roster.length)
@@ -92,9 +108,16 @@ export const useTournamentTeamsStore = defineStore('tournamentTeams', {
       return response.data
     },
 
-    // format: 'pdf' o 'xlsx'
-    async exportPlayers(tournamentId, format, filename) {
-      await downloadFile(`/tournaments/${tournamentId}/players/export/${format}`, filename)
+    // format: 'pdf' o 'xlsx'; con teamIds, solo los jugadores de esos equipos
+    async exportPlayers(tournamentId, format, filename, teamIds = []) {
+      const query = teamIds.map(id => `team_ids[]=${id}`).join('&')
+      await downloadFile(`/tournaments/${tournamentId}/players/export/${format}${query ? `?${query}` : ''}`, filename)
+    },
+
+    // PDF de los equipos inscritos; type: 'roster' o 'stats' (roster con su bateo en el torneo).
+    // Con teamId (solo roster), únicamente el de ese equipo
+    async exportTeamsPdf(tournamentId, type, filename, teamId = null) {
+      await downloadFile(`/tournaments/${tournamentId}/teams/export/${type}${teamId ? `?team_id=${teamId}` : ''}`, filename)
     },
 
     setRosterCount(teamId, count) {

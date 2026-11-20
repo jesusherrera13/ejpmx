@@ -89,6 +89,26 @@
                 >
                   Agregar equipos
                 </v-btn>
+                <v-menu location="bottom end">
+                  <template v-slot:activator="{ props: menuProps }">
+                    <v-btn
+                      v-bind="menuProps"
+                      color="primary"
+                      size="small"
+                      variant="outlined"
+                      class="text-none font-weight-bold ml-2"
+                      prepend-icon="mdi-dots-vertical"
+                      :loading="isExportingTeams"
+                      :disabled="teamsStore.teams.length === 0"
+                    >
+                      Acciones
+                    </v-btn>
+                  </template>
+                  <v-list density="compact" min-width="220" class="py-1 rounded-lg">
+                    <v-list-item prepend-icon="mdi-file-pdf-box" title="Roster" subtitle="Jugadores de cada equipo" @click="exportTeamsPdf('roster')" />
+                    <v-list-item prepend-icon="mdi-chart-box-outline" title="Estadísticas" subtitle="Roster con su bateo en el torneo" @click="exportTeamsPdf('stats')" />
+                  </v-list>
+                </v-menu>
               </div>
 
               <div v-if="teamsStore.loading && teamsStore.teams.length === 0" class="pa-6 d-flex justify-center">
@@ -116,6 +136,7 @@
                     </template>
                     <v-list density="compact" min-width="190" class="rounded-lg">
                       <v-list-item prepend-icon="mdi-cog-outline" title="Configuración" subtitle="Roster de la temporada" @click="openRoster(team)" />
+                      <v-list-item prepend-icon="mdi-printer-outline" title="Imprimir Roster" subtitle="PDF con los jugadores del equipo" @click="exportTeamsPdf('roster', team)" />
                       <v-divider class="my-1" />
                       <v-list-item
                         prepend-icon="mdi-close"
@@ -136,9 +157,28 @@
             <div class="gh-box">
               <div class="gh-box__header ga-2">
                 <v-icon icon="mdi-account-group" size="18" class="text-grey-darken-1" />
-                <span class="font-weight-bold text-grey-darken-4">{{ players.length }}</span>
-                <span class="text-grey-darken-2 text-no-wrap">{{ players.length === 1 ? 'jugador en la temporada' : 'jugadores en la temporada' }}</span>
+                <span class="font-weight-bold text-grey-darken-4">{{ filteredPlayers.length }}</span>
+                <span class="text-grey-darken-2 text-no-wrap">{{ filteredPlayers.length === 1 ? 'jugador en la temporada' : 'jugadores en la temporada' }}</span>
                 <v-spacer />
+                <v-select
+                  v-model="playerTeamIds"
+                  :items="teamsStore.teams"
+                  item-title="name"
+                  item-value="id"
+                  prepend-inner-icon="mdi-shield-home"
+                  placeholder="Todos los equipos"
+                  variant="outlined"
+                  density="compact"
+                  multiple
+                  hide-details
+                  clearable
+                  style="max-width: 260px"
+                >
+                  <template v-slot:selection="{ item, index }">
+                    <span v-if="index === 0" class="text-truncate">{{ item.name }}</span>
+                    <span v-else-if="index === 1" class="text-grey-darken-1 text-caption ml-1 text-no-wrap">(+{{ playerTeamIds.length - 1 }})</span>
+                  </template>
+                </v-select>
                 <v-text-field
                   v-model="playerSearch"
                   prepend-inner-icon="mdi-magnify"
@@ -159,7 +199,7 @@
                       class="text-none font-weight-bold rounded-pill"
                       append-icon="mdi-chevron-down"
                       :loading="isExportingPlayers"
-                      :disabled="players.length === 0"
+                      :disabled="filteredPlayers.length === 0"
                     >
                       Acciones
                     </v-btn>
@@ -173,7 +213,7 @@
 
               <v-data-table
                 :headers="playerHeaders"
-                :items="players"
+                :items="filteredPlayers"
                 :search="playerSearch"
                 :custom-filter="matchesSearch"
                 :loading="loadingPlayers"
@@ -799,12 +839,37 @@ const exportCalendar = async (format, view) => {
   }
 }
 
+// ---------- EQUIPOS: PDFs ----------
+const isExportingTeams = ref(false)
+
+// type: 'roster' (jugadores de cada equipo) o 'stats' (el roster con su bateo en el torneo);
+// con team, solo el roster de ese equipo (Imprimir Roster en el menú de su renglón)
+const exportTeamsPdf = async (type, team = null) => {
+  isExportingTeams.value = true
+  try {
+    const name = [tournament.value?.name || 'torneo', team?.name].filter(Boolean).join(' ')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/gi, '_').toLowerCase()
+    const prefix = type === 'stats' ? 'estadisticas_roster' : 'roster'
+    await teamsStore.exportTeamsPdf(props.id, type, `${prefix}_${name}.pdf`, team?.id)
+  } catch (error) {
+    notify.error(getErrorMessage(error, 'Ocurrió un error al generar el archivo'))
+  } finally {
+    isExportingTeams.value = false
+  }
+}
+
 // ---------- JUGADORES ----------
 // Jugadores en los rosters de los equipos inscritos; se recargan al abrir la pestaña
 const players = ref([])
 const loadingPlayers = ref(false)
 const playerSearch = ref('')
 const isExportingPlayers = ref(false)
+// Equipos elegidos en el combo; vacío = todos. Filtra la tabla y las exportaciones
+const playerTeamIds = ref([])
+
+const filteredPlayers = computed(() => playerTeamIds.value.length
+  ? players.value.filter(player => playerTeamIds.value.includes(player.team_id))
+  : players.value)
 
 const playerHeaders = [
   { title: 'Jugador', key: 'full_name' },
@@ -835,7 +900,7 @@ const exportPlayers = async (format) => {
   isExportingPlayers.value = true
   try {
     const name = (tournament.value?.name || 'torneo').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/gi, '_').toLowerCase()
-    await teamsStore.exportPlayers(props.id, format, `jugadores_${name}.${format}`)
+    await teamsStore.exportPlayers(props.id, format, `jugadores_${name}.${format}`, playerTeamIds.value)
   } catch (error) {
     notify.error(getErrorMessage(error, 'Ocurrió un error al generar el archivo'))
   } finally {

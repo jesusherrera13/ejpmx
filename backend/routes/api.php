@@ -13,12 +13,14 @@ use App\Http\Controllers\AdvertisingController;
 use App\Http\Controllers\ContentTypeController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\PlayerController;
+use App\Http\Controllers\FieldingPositionController;
 use App\Http\Controllers\TournamentController;
 use App\Http\Controllers\TournamentPlayerController;
 use App\Http\Controllers\PlayerStatsController;
 use App\Http\Controllers\StandingsController;
 use App\Http\Controllers\TournamentRosterController;
 use App\Http\Controllers\TournamentTeamController;
+use App\Http\Controllers\TournamentTeamPdfController;
 use App\Http\Controllers\BoxscoreController;
 use App\Http\Controllers\BoxscorePdfController;
 use App\Http\Controllers\GameController;
@@ -59,6 +61,9 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
     Route::post('/players/import/preview', [PlayerController::class, 'previewImport']);
     Route::apiResource('/players', PlayerController::class);
 
+    // FIELDING POSITION (catálogo de posiciones del roster)
+    Route::get('/fielding-positions', [FieldingPositionController::class, 'index']);
+
     // TOURNAMENT
     Route::get('/tournaments/template', [TournamentController::class, 'template']);
     Route::post('/tournaments/import', [TournamentController::class, 'import']);
@@ -67,6 +72,8 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
     // TOURNAMENT TEAM
     Route::get('/tournaments/{tournament}/teams', [TournamentTeamController::class, 'index']);
     Route::get('/tournaments/{tournament}/teams/available', [TournamentTeamController::class, 'available']);
+    Route::get('/tournaments/{tournament}/teams/export/roster', [TournamentTeamPdfController::class, 'roster']);
+    Route::get('/tournaments/{tournament}/teams/export/stats', [TournamentTeamPdfController::class, 'stats']);
     Route::post('/tournaments/{tournament}/teams', [TournamentTeamController::class, 'store']);
     Route::put('/tournaments/{tournament}/teams', [TournamentTeamController::class, 'sync']);
     Route::delete('/tournaments/{tournament}/teams/{team}', [TournamentTeamController::class, 'destroy']);
@@ -74,6 +81,7 @@ Route::group(['middleware' => ['auth:sanctum']], function() {
     Route::post('/tournaments/{tournament}/teams/{team}/players', [TournamentRosterController::class, 'store']);
     Route::post('/tournaments/{tournament}/teams/{team}/players/import', [TournamentRosterController::class, 'import']);
     Route::post('/tournaments/{tournament}/teams/{team}/players/import/preview', [TournamentRosterController::class, 'previewImport']);
+    Route::put('/tournaments/{tournament}/teams/{team}/players/{player}', [TournamentRosterController::class, 'update'])->whereNumber('player');
     Route::delete('/tournaments/{tournament}/teams/{team}/players/{player}', [TournamentRosterController::class, 'destroy'])->whereNumber('player');
     Route::get('/tournaments/{tournament}/players', [TournamentPlayerController::class, 'index']);
     Route::get('/tournaments/{tournament}/players/export/xlsx', [TournamentPlayerController::class, 'exportXlsx']);

@@ -99,14 +99,21 @@ class TournamentPlayerController extends Controller
         ]);
     }
 
-    // Ordenados por equipo y nombre; incluye jugadores que ya se eliminaron del catálogo
+    // Ordenados por equipo y nombre; incluye jugadores que ya se eliminaron del catálogo.
+    // Con team_ids[] en el request (exportaciones), solo los de esos equipos.
     private function players(Tournament $tournament): Collection
     {
+        $teamIds = request()->validate([
+            'team_ids' => 'nullable|array',
+            'team_ids.*' => 'integer',
+        ])['team_ids'] ?? [];
+
         return Player::withTrashed()
             ->join('tournament_roster_players', 'tournament_roster_players.player_id', '=', 'players.id')
             ->join('tournament_team', 'tournament_team.id', '=', 'tournament_roster_players.tournament_team_id')
             ->join('teams', 'teams.id', '=', 'tournament_team.team_id')
             ->where('tournament_roster_players.tournament_id', $tournament->id)
+            ->when($teamIds, fn ($query) => $query->whereIn('teams.id', $teamIds))
             ->orderBy('teams.name')
             ->orderBy('players.first_name')
             ->orderBy('players.last_name')

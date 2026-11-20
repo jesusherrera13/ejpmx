@@ -64,6 +64,21 @@ class TournamentRosterController extends Controller
         return response()->json($this->payload($tournament, $team), 201);
     }
 
+    // Posición del jugador en el roster (combo Posición); null la quita
+    public function update(Request $request, Tournament $tournament, Team $team, int $player)
+    {
+        $tournamentTeamId = $this->rosterOwner($tournament, $team);
+
+        $validated = $request->validate([
+            'fielding_position_id' => 'nullable|integer|exists:fielding_positions,id',
+        ], [], ['fielding_position_id' => 'posición']);
+
+        $rosterPlayer = TournamentRosterPlayer::where('tournament_team_id', $tournamentTeamId)->where('player_id', $player)->firstOrFail();
+        $rosterPlayer->update(['fielding_position_id' => $validated['fielding_position_id'] ?? null]);
+
+        return response()->json(['player_id' => $player, 'fielding_position_id' => $rosterPlayer->fielding_position_id]);
+    }
+
     // Por id para poder quitar también a un jugador que ya se eliminó del catálogo
     public function destroy(Tournament $tournament, Team $team, int $player)
     {
@@ -265,7 +280,7 @@ class TournamentRosterController extends Controller
             ->where('tournament_roster_players.tournament_team_id', $tournamentTeamId)
             ->orderBy('players.first_name')
             ->orderBy('players.last_name')
-            ->get([...self::PLAYER_COLUMNS, 'tournament_roster_players.created_at as added_at']);
+            ->get([...self::PLAYER_COLUMNS, 'tournament_roster_players.fielding_position_id', 'tournament_roster_players.created_at as added_at']);
 
         $available = Player::ownedBy($tournament->user_id)
             ->where('is_active', true)
