@@ -536,15 +536,6 @@
       @save="saveGame"
     />
 
-    <!-- Box score -->
-    <BoxscoreModal
-      v-model="showBoxscoreModal"
-      :boxscore="boxscoreData"
-      :loading="isLoadingBoxscore"
-      :saving="isSavingBoxscore"
-      @save="saveBoxscore"
-    />
-
     <!-- Confirmaciones -->
     <v-dialog :model-value="!!confirmAction" max-width="420px" persistent>
       <v-card class="rounded-xl pa-2" theme="ejp">
@@ -569,6 +560,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useTournamentsStore } from '@/stores/tournaments'
 import { useTournamentTeamsStore } from '@/stores/tournamentTeams'
 import { useGamesStore } from '@/stores/games'
@@ -578,7 +570,6 @@ import { formatDate, parseDate, toIsoDate } from '@/utils/dates'
 import TournamentSchedule from '@/components/TournamentSchedule.vue'
 import GameFormModal from '@/components/GameFormModal.vue'
 import TeamRosterModal from '@/components/TeamRosterModal.vue'
-import BoxscoreModal from '@/components/BoxscoreModal.vue'
 
 const props = defineProps({
   id: { type: [String, Number], required: true }
@@ -587,10 +578,14 @@ const props = defineProps({
 const tournamentsStore = useTournamentsStore()
 const teamsStore = useTournamentTeamsStore()
 const gamesStore = useGamesStore()
+const router = useRouter()
+const route = useRoute()
 const notify = useNotificationsStore()
 
 const tournament = ref(null)
-const tab = ref('equipos')
+// Pestaña inicial: la de ?tab= (al regresar del box score se abre el calendario)
+const TABS = ['equipos', 'jugadores', 'calendario']
+const tab = ref(TABS.includes(route.query.tab) ? route.query.tab : 'equipos')
 const initialLoading = ref(true)
 const hasCalendar = computed(() => gamesStore.games.length > 0)
 
@@ -959,43 +954,14 @@ const saveGame = async (data) => {
   }
 }
 
-const showBoxscoreModal = ref(false)
-const boxscoreData = ref(null)
-const boxscoreGameId = ref(null)
-const isLoadingBoxscore = ref(false)
-const isSavingBoxscore = ref(false)
-
-const openBoxscore = async (item) => {
+// El box score de un partido se captura en su propia página (ruta GameBoxscore)
+const openBoxscore = (item) => {
   // Una serie agrupa varios partidos: el box score es de cada partido
   if (item.games) {
     notify.warning('Para capturar el box score cambia a la vista Partidos')
     return
   }
-  boxscoreGameId.value = item.id
-  boxscoreData.value = null
-  showBoxscoreModal.value = true
-  isLoadingBoxscore.value = true
-  try {
-    boxscoreData.value = await gamesStore.fetchBoxscore(props.id, item.id)
-  } catch (error) {
-    notify.error(getErrorMessage(error, 'Ocurrió un error al cargar el box score'))
-    showBoxscoreModal.value = false
-  } finally {
-    isLoadingBoxscore.value = false
-  }
-}
-
-const saveBoxscore = async (data) => {
-  isSavingBoxscore.value = true
-  try {
-    await gamesStore.saveBoxscore(props.id, boxscoreGameId.value, data)
-    notify.success('Box score guardado correctamente')
-    showBoxscoreModal.value = false
-  } catch (error) {
-    notify.error(getErrorMessage(error, 'Ocurrió un error al guardar el box score'))
-  } finally {
-    isSavingBoxscore.value = false
-  }
+  router.push({ name: 'GameBoxscore', params: { id: props.id, gameId: item.id } })
 }
 
 // ---------- CONFIRMACIONES ----------

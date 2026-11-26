@@ -11,13 +11,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * PA apariciones, AB turnos oficiales, R carreras, H hits (1B, 2B, 3B, HR; IH hits de cuadro, incluidos en 1B),
  * RBI impulsadas, BB bases por bolas (IBB intencionales), HBP golpeado, SF elevado de sacrificio,
  * SH toque de sacrificio, ROE se embasó por error, SO ponches (KS tirándole, KC sin tirarle),
- * LOB corredores que dejó en base al hacer el tercer out, E errores que cometió a la defensiva.
+ * SB bases robadas, PK outs por revire (pickoff), GIDP bateó para doble play,
+ * LOB veces que se quedó en base al terminar la entrada (como en The Perfect Boxscore), E errores a la defensiva.
  * is_substitute: entró de cambio y ocupa el turno al bat del renglón anterior.
  */
 class GameBattingLine extends Model
 {
     // Columnas de estadísticas, en el orden del box score
-    public const STATS = ['pa', 'ab', 'r', 'h', 'singles', 'ih', 'doubles', 'triples', 'hr', 'rbi', 'bb', 'ibb', 'hbp', 'sf', 'sh', 'roe', 'so', 'so_swinging', 'so_looking', 'lob', 'e'];
+    public const STATS = ['pa', 'ab', 'r', 'h', 'singles', 'ih', 'doubles', 'triples', 'hr', 'rbi', 'bb', 'ibb', 'hbp', 'sf', 'sh', 'roe', 'so', 'so_swinging', 'so_looking', 'sb', 'pk', 'gidp', 'lob', 'e'];
 
     protected $fillable = [
         'game_id',

@@ -1,4 +1,4 @@
-{{-- Scorecard de un partido para PDF (Dompdf): line score y una página por equipo. Ver ScorecardPdfController --}}
+{{-- Scorecard de un partido para PDF (Dompdf): line score y una página por equipo. Ver BoxscorePdfController --}}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -39,7 +39,7 @@
         .rbi { font-size: 6px; vertical-align: super; }
         .out { color: #c62828; font-size: 6.5px; }
         .stranded { color: #1565c0; font-size: 6px; }
-        .left { color: #c2410c; font-size: 6.5px; font-weight: bold; }
+        .steal { color: #7b3fb8; font-size: 6px; }
         .next { color: #92400e; font-size: 6.5px; font-weight: bold; }
         .entered { color: #94a3b8; font-weight: normal; font-size: 7px; }
         .totals td { background: #f1f5f9; font-weight: bold; text-align: center; }
@@ -89,7 +89,7 @@
             <h2>{{ $card['team']->name }} <span class="entered">· {{ $card['side'] === 'away' ? 'Visitante' : 'Local' }}</span></h2>
 
             {{-- Anchos fijos en el encabezado (Dompdf no respeta colgroup): el nombre cabe y las estadísticas ocupan poco --}}
-            @php($inningWidth = round(62 / $innings, 2))
+            @php($inningWidth = round(60 / $innings, 2))
             <table class="grid">
                 <thead>
                     <tr>
@@ -99,8 +99,8 @@
                         @for ($inning = 1; $inning <= $innings; $inning++)
                             <th style="width: {{ $inningWidth }}%">{{ $inning }}</th>
                         @endfor
-                        @foreach (['AB', 'R', 'H', 'RBI', 'BB', 'K', 'LOB'] as $title)
-                            <th class="stat-head" style="width: 2.28%">{{ $title }}</th>
+                        @foreach ($card['columns'] as $title)
+                            <th class="stat-head" style="width: {{ $title === 'AVG' ? '2.8' : '1.5' }}%">{{ $title }}</th>
                         @endforeach
                     </tr>
                 </thead>
@@ -121,13 +121,13 @@
                                             @if ($play['diamond'])<img src="{{ $play['diamond'] }}" alt="">@endif
                                             <span class="{{ $play['hit'] ? 'hit' : '' }} {{ $play['bases'] === 4 ? 'scored' : '' }}">@if ($play['looking'])<span class="looking">K</span>@else{{ $play['label'] }}@endif</span>@if ($play['rbi'])<span class="rbi">{{ $play['rbi'] }}</span>@endif
                                         </div>
+                                        @if ($play['steals'])
+                                            <div class="steal">{{ $play['steals'] }}</div>
+                                        @endif
                                         @if ($play['out'])
                                             <div class="out">× {{ $play['out'] }}</div>
                                         @elseif ($play['stranded'])
                                             <div class="stranded">LOB</div>
-                                        @endif
-                                        @if ($play['left'])
-                                            <div class="left">Dejó {{ $play['left'] }}</div>
                                         @endif
                                     @endforeach
                                     @if (in_array($inning, $row['next'], true))
@@ -153,9 +153,9 @@
                     <tr class="lob-row">
                         <td colspan="3" class="label">LOB</td>
                         @for ($inning = 1; $inning <= $innings; $inning++)
-                            <td>{{ $card['innings'][$inning]['played'] ? $card['innings'][$inning]['lob'] : '' }}</td>
+                            <td>{{ $card['innings'][$inning]['closed'] ? $card['innings'][$inning]['lob'] : '' }}</td>
                         @endfor
-                        <td colspan="7">{{ $card['totals']['lob'] }} dejados en base</td>
+                        <td colspan="{{ count($card['columns']) }}">{{ collect($card['innings'])->sum('lob') }} en el juego</td>
                     </tr>
                 </tbody>
             </table>

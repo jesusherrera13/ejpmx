@@ -60,12 +60,15 @@ export const useGamesStore = defineStore('games', {
       return response.data
     },
 
-    // Guarda el box score y recarga el calendario para reflejar el marcador
-    async saveBoxscore(tournamentId, gameId, data) {
+    // Guarda el box score y recarga el calendario para reflejar el marcador. El autoguardado de la página del box score
+    // pasa reloadSchedule: false (el calendario se carga al regresar a la configuración del torneo)
+    async saveBoxscore(tournamentId, gameId, data, { reloadSchedule = true } = {}) {
       const response = await axiosClient.put(`/tournaments/${tournamentId}/games/${gameId}/boxscore`, data)
-      const schedule = await axiosClient.get(`/tournaments/${tournamentId}/games`)
-      this.games = schedule.data.games
-      this.byes = schedule.data.byes
+      if (reloadSchedule) {
+        const schedule = await axiosClient.get(`/tournaments/${tournamentId}/games`)
+        this.games = schedule.data.games
+        this.byes = schedule.data.byes
+      }
       return response.data
     },
 

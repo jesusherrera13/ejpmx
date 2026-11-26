@@ -1,7 +1,8 @@
-<!-- src/components/BoxscoreModal.vue -->
-<!-- Captura del box score de un partido: Score, Line Score, Bateo, Bateo detallado y Scorecard -->
+<!-- src/components/BoxscoreEditor.vue -->
+<!-- Captura del box score de un partido: Score, Line Score, Bateo, Bateo detallado y Scorecard.
+     Es el contenido de la página GameBoxscore (antes se abría en un modal) -->
 <template>
-  <v-dialog v-model="dialog" max-width="1440px" persistent scrollable>
+  <div class="boxscore-editor" @focusout="onFocusOut">
     <v-card class="rounded-xl pa-2" theme="ejp">
       <!-- Header -->
       <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
@@ -15,7 +16,6 @@
             </span>
           </template>
         </div>
-        <v-btn icon="mdi-close" variant="text" density="comfortable" :disabled="saving" @click="dialog = false" />
       </v-card-title>
 
       <v-divider class="my-2" />
@@ -112,6 +112,7 @@
                       <input
                         v-model="lineScore[side][index]"
                         type="number"
+                        :autocomplete="NO_AUTOFILL"
                         min="0"
                         class="stat-input"
                         :placeholder="side === 'home' && index === lineScore.home.length - 1 ? 'X' : '0'"
@@ -122,16 +123,16 @@
                   <td class="total">
                     <span v-if="mode === 'linescore'" class="font-weight-black" title="Suma de las entradas">{{ inningRuns(side) }}</span>
                     <span v-else-if="fromLineup(side)" class="font-weight-black" title="Suma de las carreras del lineup">{{ columnTotal(side, 'r') }}</span>
-                    <input v-else v-model="totals[side].r" type="number" min="0" class="stat-input stat-input--total" />
+                    <input v-else v-model="totals[side].r" type="number" min="0" :autocomplete="NO_AUTOFILL" class="stat-input stat-input--total" />
                   </td>
                   <td class="total">
                     <span v-if="fromLineup(side)" class="font-weight-black" title="Suma de 1B, 2B, 3B y HR del lineup">{{ columnTotal(side, 'h') }}</span>
-                    <input v-else v-model="totals[side].h" type="number" min="0" class="stat-input stat-input--total" />
+                    <input v-else v-model="totals[side].h" type="number" min="0" :autocomplete="NO_AUTOFILL" class="stat-input stat-input--total" />
                   </td>
-                  <td class="total"><input v-model="totals[side].e" type="number" min="0" class="stat-input stat-input--total" /></td>
+                  <td class="total"><input v-model="totals[side].e" type="number" min="0" :autocomplete="NO_AUTOFILL" class="stat-input stat-input--total" /></td>
                   <td class="total">
                     <span v-if="mode === 'scorecard'" class="font-weight-black" title="Corredores que quedaron en base al terminar las entradas jugadas">{{ teamLob(side) }}</span>
-                    <input v-else v-model="totals[side].lob" type="number" min="0" class="stat-input stat-input--total" />
+                    <input v-else v-model="totals[side].lob" type="number" min="0" :autocomplete="NO_AUTOFILL" class="stat-input stat-input--total" />
                   </td>
                 </tr>
               </tbody>
@@ -180,7 +181,7 @@
               icon="mdi-account-off-outline"
             >
               {{ teamOf(battingSide).name }} no tiene jugadores en su roster de este torneo. Agrégalos en Equipos › ⋮ › Configuración;
-              mientras tanto puedes capturar con un lineup provisional.
+              mientras tanto puedes capturar en los turnos sin jugador y asignarlos después.
             </v-alert>
 
             <v-alert
@@ -198,7 +199,7 @@
             <!-- Scorecard: captura turno por turno en el orden al bat -->
             <div v-if="mode === 'scorecard'" class="play-panel mb-3">
               <div v-if="batting[battingSide].length === 0" class="d-flex flex-wrap align-center ga-2 modal-note text-grey-darken-1 pa-3">
-                <span class="order-last ml-auto text-right">Agrega el lineup de {{ teamOf(battingSide).name }} para capturar sus turnos, o empieza con uno provisional y asigna a los jugadores después.</span>
+                <span class="order-last ml-auto text-right">Agrega el lineup de {{ teamOf(battingSide).name }} para capturar sus turnos.</span>
                 <v-btn size="small" variant="flat" color="success" class="text-none" prepend-icon="mdi-account-plus" @click="addBatter">Agregar bateador</v-btn>
                 <v-btn
                   size="small"
@@ -210,9 +211,6 @@
                   @click="openRosterDialog"
                 >
                   Agregar del roster
-                </v-btn>
-                <v-btn size="small" variant="flat" color="primary" class="text-none" prepend-icon="mdi-account-multiple-plus" @click="addProvisionalLineup">
-                  Lineup provisional (9)
                 </v-btn>
               </div>
               <div v-else-if="substitutesWithoutEntry.length" class="d-flex flex-wrap align-center ga-2 modal-note pa-3">
@@ -280,10 +278,40 @@
                       <v-icon v-for="out in 3" :key="out" :icon="out <= panelTurn.outsBefore ? 'mdi-circle' : 'mdi-circle-outline'" size="12" color="error" />
                     </span>
                     <v-chip v-if="turnIndex === null" size="x-small" color="primary" variant="tonal" class="ml-2">Por capturar</v-chip>
+                    <!-- Cuenta del turno por capturar: 4 bolas = base por bolas (avanzan los forzados), 3 strikes = ponche -->
+                    <span v-if="turnIndex === null && !panelPlay.result" class="ml-3 text-caption text-grey-darken-1 text-no-wrap">
+                      Bolas
+                      <v-icon
+                        v-for="ball in MAX_BALLS"
+                        :key="`ball-${ball}`"
+                        :icon="ball <= count.balls ? 'mdi-circle' : 'mdi-circle-outline'"
+                        size="12"
+                        color="success"
+                        class="count-dot"
+                        :title="`${ball} bola(s)`"
+                        @click="setCount('balls', ball)"
+                      />
+                      <span class="ml-2">Strikes</span>
+                      <v-icon
+                        v-for="strike in MAX_STRIKES"
+                        :key="`strike-${strike}`"
+                        :icon="strike <= count.strikes ? 'mdi-circle' : 'mdi-circle-outline'"
+                        size="12"
+                        color="warning"
+                        class="count-dot"
+                        :title="`${strike} strike(s)`"
+                        @click="setCount('strikes', strike)"
+                      />
+                      <span v-if="countStatus" class="ml-2 font-weight-bold text-warning">{{ countStatus }}</span>
+                    </span>
+                    <!-- Estadísticas del bateador en el partido -->
+                    <div class="play-panel__stats">
+                      <span v-for="stat in panelLineStats" :key="stat.key" :title="stat.title">
+                        <span class="text-grey-darken-1">{{ stat.label }}</span> <strong>{{ stat.value }}</strong>
+                      </span>
+                    </div>
                   </div>
                   <v-btn size="small" variant="outlined" class="text-none" prepend-icon="mdi-book-open-variant" title="Significado de las abreviaciones" @click="glossaryDialog = true">Glosario</v-btn>
-                <v-btn size="small" variant="outlined" class="text-none" prepend-icon="mdi-arrow-left" :disabled="!canGoBack" @click="goBack">Anterior</v-btn>
-                  <v-btn size="small" variant="flat" color="black" class="text-none" append-icon="mdi-arrow-right" :disabled="turnIndex === null" @click="goNext">Siguiente</v-btn>
                   <v-menu location="bottom end">
                     <template v-slot:activator="{ props: menuProps }">
                       <v-btn v-bind="menuProps" icon="mdi-dots-vertical" size="small" variant="text" title="Más acciones" />
@@ -315,7 +343,261 @@
                   </v-menu>
                 </div>
 
-                <div class="play-panel__play">
+              </template>
+            </div>
+
+            <!-- Escritorio: barra y tabla a la izquierda, botones de la jugada en una columna a la derecha (como en TPB) -->
+            <div class="sc-layout" :class="{ 'sc-layout--scorecard': mode === 'scorecard' }">
+            <div class="sc-layout__main">
+            <!-- Barra del scorecard (como en The Perfect Boxscore): jugada (limpiar, deshacer, rehacer, bateador anterior /
+                 siguiente), vista compacta y lineup (subir, bajar, sustituto, quitar) sobre el renglón seleccionado -->
+            <div v-if="mode === 'scorecard' && batting[battingSide].length" class="sc-toolbar mb-2">
+              <v-btn icon="mdi-broom" size="small" variant="tonal" title="Limpiar la jugada del turno" :disabled="!canClear" @click="clearPlay" />
+              <v-btn icon="mdi-undo" size="small" variant="tonal" title="Deshacer el último cambio de jugada" :disabled="!undoStack.length" @click="undo" />
+              <v-btn icon="mdi-redo" size="small" variant="tonal" title="Rehacer el cambio deshecho" :disabled="!redoStack.length" @click="redo" />
+              <v-btn icon="mdi-skip-previous" size="small" variant="tonal" title="Bateador anterior" :disabled="!canGoBack" @click="goBack" />
+              <v-btn icon="mdi-skip-next" size="small" variant="flat" color="black" title="Siguiente bateador" :disabled="turnIndex === null" @click="goNext" />
+              <span class="sc-toolbar__gap" />
+              <v-btn
+                :icon="slim ? 'mdi-arrow-expand-horizontal' : 'mdi-arrow-collapse-horizontal'"
+                size="small"
+                :variant="slim ? 'flat' : 'tonal'"
+                :color="slim ? 'primary' : undefined"
+                :title="slim ? 'Vista completa: todas las entradas' : 'Vista compacta: solo la entrada en juego'"
+                @click="toggleSlim"
+              />
+              <template v-if="slim">
+                <v-btn icon="mdi-chevron-left" size="small" variant="tonal" :title="`Entrada anterior (viendo la ${viewInning}ª)`" :disabled="viewInning <= 1" @click="viewInning--" />
+                <v-btn icon="mdi-chevron-right" size="small" variant="tonal" :title="`Entrada siguiente (viendo la ${viewInning}ª)`" :disabled="viewInning >= lastInning" @click="viewInning++" />
+              </template>
+              <span class="sc-toolbar__gap" />
+              <v-btn icon="mdi-arrow-up" size="small" variant="tonal" title="Subir el registro seleccionado" :disabled="!canMoveSelected(-1)" @click="moveSelected(-1)" />
+              <v-btn icon="mdi-arrow-down" size="small" variant="tonal" title="Bajar el registro seleccionado" :disabled="!canMoveSelected(1)" @click="moveSelected(1)" />
+              <v-btn icon="mdi-swap-horizontal" size="small" variant="tonal" title="Agregar un sustituto en este turno (entra / sale)" :disabled="!selectedLine" @click="addSubToSelected" />
+              <v-btn
+                :icon="selectedLine?.is_substitute ? 'mdi-account-arrow-up' : 'mdi-subdirectory-arrow-right'"
+                size="small"
+                variant="tonal"
+                :title="selectedLine?.is_substitute ? 'Marcar el registro seleccionado como titular' : 'Marcar el registro seleccionado como cambio del turno de arriba'"
+                :disabled="!canToggleSubstitute"
+                @click="toggleSubstitute"
+              />
+              <v-btn icon="mdi-close" size="small" variant="tonal" color="error" :title="removeTitle" :disabled="!canRemoveSelected" @click="removeSelected" />
+              <span v-if="selectedLine" class="text-caption text-grey-darken-1 ml-2">Seleccionado: {{ playerName(selectedLine) }}</span>
+            </div>
+
+            <div class="box-wrap">
+              <table class="box-table box-table--lineup">
+                <thead>
+                  <tr>
+                    <th class="order">#</th>
+                    <th class="text-left player">Jugador</th>
+                    <th v-if="!slimActive" class="position">Pos</th>
+                    <template v-if="mode === 'scorecard'">
+                      <th
+                        v-for="inning in visibleInnings"
+                        :key="`inning-${inning}`"
+                        class="sc-inning"
+                        :class="`sc-inning--${inningState(battingSide, inning)}`"
+                        :title="INNING_STATES[inningState(battingSide, inning)]"
+                      >
+                        {{ inning }}
+                      </th>
+                    </template>
+                    <th v-for="column in battingColumns" :key="column.key" :title="column.title" :class="{ derived: column.derived }">{{ column.label }}</th>
+                    <th v-if="mode !== 'scorecard'" class="row-actions"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(line, index) in batting[battingSide]"
+                    :key="line.uid"
+                    class="lineup-row"
+                    :class="{ 'substitute-row': line.is_substitute, 'lineup-row--selected': mode === 'scorecard' && selectedLine === line }"
+                    @click="selectedLine = line"
+                  >
+                    <td class="order text-grey-darken-1">{{ line.is_substitute ? '' : slotNumber(index) }}</td>
+                    <td class="player">
+                      <div class="d-flex align-center">
+                        <v-icon v-if="line.is_substitute" icon="mdi-subdirectory-arrow-right" size="18" class="text-grey-darken-1 mr-1" title="Entró de cambio" />
+                        <!-- Sin el cuadro de sugerencias del navegador encima de la lista (ver NO_AUTOFILL) -->
+                        <v-autocomplete
+                          v-model="line.player_id"
+                          :autocomplete="NO_AUTOFILL"
+                          :name="fieldName(`player-${line.uid}`)"
+                          :items="playerOptions(line)"
+                          :custom-filter="playerFilter"
+                          item-title="name"
+                          item-value="id"
+                          :placeholder="line.placeholder ? `${line.placeholder} (provisional)` : line.is_substitute ? 'Selecciona jugador' : `Bateador ${slotNumber(index)}`"
+                          :title="!line.player_id && line.placeholder ? 'Bateador provisional: elige al jugador real cuando lo tengas' : ''"
+                          variant="outlined"
+                          density="compact"
+                          hide-details
+                          class="cell-field flex-grow-1"
+                          :class="{ 'cell-field--provisional': !line.player_id && line.placeholder }"
+                        />
+                        <v-select
+                          v-if="line.is_substitute"
+                          v-model="line.entered_inning"
+                          :items="enteredInningOptions"
+                          placeholder="Entró"
+                          title="Entrada en la que entró a jugar"
+                          variant="outlined"
+                          density="compact"
+                          hide-details
+                          class="cell-field entered-field ml-1"
+                          :error="mode === 'scorecard' && !line.entered_inning && line.plays.some(play => play.result)"
+                        />
+                        <v-btn
+                          v-if="mode === 'scorecard' && !slimActive"
+                          icon="mdi-chart-box-outline"
+                          size="x-small"
+                          variant="text"
+                          color="grey-darken-2"
+                          class="ml-1"
+                          title="Game Stats: estadísticas del jugador en el partido"
+                          @click.stop="openGameStats(line)"
+                        />
+                      </div>
+                    </td>
+                    <td v-if="!slimActive" class="position">
+                      <!-- Sin botón de limpiar (no deja ver la posición en la columna angosta): se quita con "—" -->
+                      <v-select
+                        v-model="line.position"
+                        :items="positionOptions"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        :title="line.position ? `Posición: ${line.position}` : 'Posición defensiva'"
+                        class="cell-field position-field"
+                      />
+                    </td>
+                    <template v-if="mode === 'scorecard'">
+                      <td
+                        v-for="inning in visibleInnings"
+                        :key="`inning-${inning}`"
+                        class="sc-cell"
+                        :class="[
+                          `sc-cell--${inningState(battingSide, inning)}`,
+                          cellPlays(line, inning).length === 1 ? `sc-cell--style-${playStyle(cellPlays(line, inning)[0])}` : '',
+                          {
+                            'sc-cell--active': panelTurn && panelTurn.line === line && panelTurn.inning === inning,
+                            'sc-cell--empty': cellPlays(line, inning).length === 0,
+                            'sc-cell--played': cellPlays(line, inning).length > 0,
+                            'sc-cell--unused': isUnusedCell(battingSide, line, inning) || isInactiveCell(battingSide, line, inning),
+                            'sc-cell--next': nextUpCells.get(line)?.has(inning)
+                          }
+                        ]"
+                        :title="cellPlays(line, inning).length
+                          ? 'Ver este turno'
+                          : isInactiveCell(battingSide, line, inning) ? 'No estaba en el juego en esta entrada'
+                          : isUnusedCell(battingSide, line, inning) ? 'Se terminó la entrada antes de su turno' : 'Los turnos se capturan en orden con Anterior / Siguiente'"
+                        @click="openTurn(line, inning)"
+                      >
+                        <div v-for="(play, playIndex) in cellPlays(line, inning)" :key="playIndex" class="sc-play" :class="`sc-play--${playStyle(play)}`">
+                          <!-- Diamante como en The Perfect Boxscore: recorrido (morado el tramo robado), X si fue out en base,
+                               punto en la base en que se quedó (naranja si quedó LOB) y relleno si anotó -->
+                          <svg v-if="play.bases > 0" viewBox="0 0 20 20" class="sc-diamond" :class="{ 'sc-diamond--scored': play.bases === 4 }">
+                            <title>{{ basesTitle(play) }}</title>
+                            <polygon points="10,2 18,10 10,18 2,10" class="sc-diamond__field" />
+                            <line
+                              v-for="(segment, segmentIndex) in diamondSegments(play)"
+                              :key="segmentIndex"
+                              :x1="segment.from[0]"
+                              :y1="segment.from[1]"
+                              :x2="segment.to[0]"
+                              :y2="segment.to[1]"
+                              class="sc-diamond__path"
+                              :class="{ 'sc-diamond__path--stolen': segment.stolen }"
+                            />
+                            <template v-if="play.bases <= 3">
+                              <path
+                                v-if="play.out_on_base || dpOutOf(play)"
+                                :d="`M${diamondBase(play)[0] - 3} ${diamondBase(play)[1] - 3} L${diamondBase(play)[0] + 3} ${diamondBase(play)[1] + 3} M${diamondBase(play)[0] - 3} ${diamondBase(play)[1] + 3} L${diamondBase(play)[0] + 3} ${diamondBase(play)[1] - 3}`"
+                                class="sc-diamond__out"
+                              />
+                              <circle v-else :cx="diamondBase(play)[0]" :cy="diamondBase(play)[1]" r="2.9" class="sc-diamond__runner" :class="{ 'sc-diamond__runner--stranded': isStranded(play) }" />
+                            </template>
+                          </svg>
+                          <span class="sc-play__text">
+                            <span class="sc-play__main">{{ playLabel(play) }}<sup v-if="play.rbi" class="sc-rbi" :title="`${play.rbi} impulsada(s)`">{{ play.rbi }}</sup></span>
+                            <!-- Segunda línea: robos, DP, PK, pisa y corre, out en base o LOB -->
+                            <span v-if="stealsLabel(play) || dpOutOf(play) || play.out_on_base || isStranded(play)" class="sc-play__extra">
+                              <span v-if="stealsLabel(play)" class="sc-steal" :title="STEALS.filter(steal => play.stolen_bases.includes(steal.value)).map(steal => steal.label).join(', ')">{{ stealsLabel(play) }}</span>
+                              <span v-if="dpOutOf(play)" class="sc-runner-out" :title="`Out en doble play (${dpLabel(play)})`">{{ dpLabel(play) }}</span>
+                              <span v-else-if="play.out_on_base" class="sc-runner-out" :title="runnerOutTitle(play)"><v-icon v-if="!play.out_type" icon="mdi-close" size="10" />{{ runnerOutLabel(play) }}</span>
+                              <span v-else-if="isStranded(play)" class="sc-stranded" title="Se quedó en base al terminar la entrada">LOB</span>
+                            </span>
+                          </span>
+                        </div>
+                        <div
+                          v-if="nextUpCells.get(line)?.has(inning)"
+                          class="sc-next"
+                          :title="`Se quedó en turno al cerrar la entrada: abre la ${inning + 1}ª`"
+                        >
+                          <v-icon icon="mdi-arrow-right" size="12" />{{ inning + 1 }}ª
+                        </div>
+                      </td>
+                    </template>
+                    <td v-for="column in battingColumns" :key="column.key" :class="{ derived: column.derived }">
+                      <span v-if="column.derived" class="font-weight-bold">{{ statValue(line, column.key) }}</span>
+                      <input v-else v-model="line[column.key]" type="number" min="0" :autocomplete="NO_AUTOFILL" class="stat-input" />
+                    </td>
+                    <td v-if="mode !== 'scorecard'" class="row-actions text-no-wrap">
+                      <v-btn icon="mdi-arrow-up" size="x-small" variant="text" :disabled="index === 0" title="Subir en el orden al bat" @click="move(index, -1)" />
+                      <v-btn icon="mdi-arrow-down" size="x-small" variant="text" :disabled="index === batting[battingSide].length - 1" title="Bajar en el orden al bat" @click="move(index, 1)" />
+                      <v-btn icon="mdi-account-switch" size="x-small" variant="text" color="grey-darken-2" title="Agregar cambio" @click="addSubstitute(index)" />
+                      <!-- El primer bateador siempre es titular -->
+                      <v-btn
+                        :icon="line.is_substitute ? 'mdi-account-arrow-up' : 'mdi-subdirectory-arrow-right'"
+                        size="x-small"
+                        variant="text"
+                        color="grey-darken-2"
+                        :disabled="index === 0"
+                        :title="line.is_substitute ? 'Marcar como titular' : 'Marcar como cambio'"
+                        @click="line.is_substitute = !line.is_substitute"
+                      />
+                      <v-btn icon="mdi-close" size="x-small" variant="text" color="error" title="Quitar del lineup" @click="batting[battingSide].splice(index, 1)" />
+                    </td>
+                  </tr>
+                  <tr v-if="batting[battingSide].length === 0">
+                    <td :colspan="mode === 'scorecard' ? battingColumns.length + visibleInnings.length + (slimActive ? 2 : 3) : battingColumns.length + 4" class="text-center text-grey-darken-1 pa-4">
+                      Sin bateadores. Usa <strong>Agregar bateador</strong> para armar el lineup.
+                    </td>
+                  </tr>
+                  <tr v-else class="totals-row">
+                    <td></td>
+                    <td class="text-left font-weight-bold">Totales</td>
+                    <td v-if="!slimActive"></td>
+                    <template v-if="mode === 'scorecard'">
+                      <td v-for="inning in visibleInnings" :key="`inning-${inning}`" class="font-weight-bold" :class="{ 'inning--pending': inningState(battingSide, inning) === 'pending' }" title="Carreras de la entrada">{{ inningRunsLabel(battingSide, inning) }}</td>
+                    </template>
+                    <td v-for="column in battingColumns" :key="column.key" class="font-weight-bold">{{ columnTotal(battingSide, column.key) }}</td>
+                    <td v-if="mode !== 'scorecard'"></td>
+                  </tr>
+                  <tr v-if="mode === 'scorecard' && batting[battingSide].length" class="totals-row lob-row">
+                    <td></td>
+                    <td class="text-left font-weight-bold" title="Dejados en base (Left On Base)">LOB</td>
+                    <td v-if="!slimActive"></td>
+                    <td
+                      v-for="inning in visibleInnings"
+                      :key="`lob-${inning}`"
+                      :class="{ 'inning--pending': inningState(battingSide, inning) !== 'played' }"
+                      :title="inningState(battingSide, inning) === 'played' ? 'Corredores que quedaron en base al terminar la entrada' : 'La entrada no ha terminado'"
+                    >
+                      {{ inningState(battingSide, inning) === 'played' ? inningLob(battingSide, inning) : '–' }}
+                    </td>
+                    <td :colspan="battingColumns.length" class="text-left font-weight-bold">{{ teamLob(battingSide) }} en el juego</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            </div>
+
+            <!-- Captura de la jugada del turno: Jugada, Anotación, Corrido, Impulsadas (y DP, out en base...) -->
+            <aside v-if="mode === 'scorecard'" class="sc-layout__side play-panel">
+                <div v-if="showPlayColumn" class="play-panel__play">
                   <div class="play-panel__label">Jugada</div>
                   <div class="play-panel__options">
                     <div v-for="group in RESULT_GROUPS" :key="group.title" class="play-panel__group">
@@ -336,23 +618,54 @@
                     </div>
                   </div>
 
+                  <div class="play-panel__label">Anotación</div>
+                  <div v-if="!panelPlay.result" class="play-panel__options" title="Elige primero la jugada">
+                    <v-chip v-for="position in NOTATION_BUTTONS" :key="position" size="small" label variant="outlined" disabled>{{ position }}</v-chip>
+                  </div>
                   <template v-if="panelPlay.result">
-                    <div class="play-panel__label">Anotación</div>
                     <div class="play-panel__options">
-                      <v-chip
-                        v-for="notation in notationOptions(panelPlay)"
-                        :key="notation.value"
-                        size="small"
-                        label
-                        :title="notation.title"
-                        :color="panelPlay.notation === notation.value ? 'primary' : undefined"
-                        :variant="panelPlay.notation === notation.value ? 'flat' : 'outlined'"
-                        @click="panelPlay.notation = panelPlay.notation === notation.value ? '' : notation.value"
-                      >
-                        {{ notation.value }}
-                      </v-chip>
-                      <input v-model="panelPlay.notation" maxlength="20" placeholder="Otra..." class="notation-input" title="Anotación libre" />
+                      <template v-for="(notation, notationIndex) in notationOptions(panelPlay)" :key="notation.value">
+                        <span
+                          v-if="notation.group && notation.group !== notationOptions(panelPlay)[notationIndex - 1]?.group"
+                          class="text-caption text-grey-darken-1 ml-1 mr-1"
+                        >{{ notation.group }}</span>
+                        <v-chip
+                          size="small"
+                          label
+                          :title="notation.title"
+                          :color="panelPlay.notation === notation.value ? 'primary' : undefined"
+                          :variant="panelPlay.notation === notation.value ? 'flat' : 'outlined'"
+                          @click="panelPlay.notation = panelPlay.notation === notation.value ? '' : notation.value"
+                        >
+                          {{ notation.group === 'Desatendido (U)' ? notation.value.slice(0, -1) : notation.value }}
+                        </v-chip>
+                      </template>
+                      <input v-model="panelPlay.notation" maxlength="20" placeholder="Otra..." class="notation-input" :autocomplete="NO_AUTOFILL" title="Anotación libre" />
                     </div>
+
+                    <!-- Doble play: qué corredor fue el otro out (se le cuenta antes que el del bateador) -->
+                    <template v-if="panelPlay.result === 'DP'">
+                      <div class="play-panel__label">Doble play</div>
+                      <div class="play-panel__options">
+                        <span class="text-caption text-grey-darken-1 mr-1">Out del corredor en</span>
+                        <v-chip
+                          v-for="runner in panelDpCandidates"
+                          :key="runner.line.uid"
+                          size="small"
+                          label
+                          prepend-icon="mdi-close-circle-outline"
+                          :title="`${playerName(runner.line)} fue el otro out del doble play`"
+                          :color="panelPlay.dp_runner === runner.line ? 'error' : undefined"
+                          :variant="panelPlay.dp_runner === runner.line ? 'flat' : 'outlined'"
+                          @click="setDpRunner(runner.line)"
+                        >
+                          {{ BASES.find(base => base.value === runner.play.bases)?.label }} · {{ playerName(runner.line) }}
+                        </v-chip>
+                        <span v-if="panelDpCandidates.length === 0" class="text-caption text-grey-darken-1 ml-1">
+                          Sin corredores en base: el DP cuenta solo el out del bateador.
+                        </span>
+                      </div>
+                    </template>
 
                     <template v-if="RUNNER_OUTS_IN_PLAY[panelPlay.result]">
                       <div class="play-panel__label">Corredor out</div>
@@ -375,6 +688,8 @@
                         </span>
                       </div>
                     </template>
+
+                  </template>
 
                     <div class="play-panel__label">Corrido</div>
                     <div class="play-panel__options">
@@ -400,30 +715,123 @@
                         title="Lo pusieron out en las bases en una jugada posterior. Indica en el turno de quién: si fue en un DP o FC, ese out ya es parte de la jugada y no se cuenta dos veces."
                         :color="panelPlay.out_on_base ? 'error' : undefined"
                         :variant="panelPlay.out_on_base ? 'flat' : 'outlined'"
-                        :disabled="panelPlay.bases < 1 || panelPlay.bases > 3"
+                        :disabled="panelPlay.bases < 1 || panelPlay.bases > 3 || !!dpOutOf(panelPlay)"
                         @click="setOutOnBase(panelPlay, !panelPlay.out_on_base)"
                       >
                         Out en base
                       </v-chip>
+                      <v-chip
+                        size="small"
+                        label
+                        title="Out por revire (pickoff): el lanzador o el receptor lo sorprendió fuera de la base"
+                        :color="panelPlay.out_on_base && panelPlay.out_type === 'PK' ? 'error' : undefined"
+                        :variant="panelPlay.out_on_base && panelPlay.out_type === 'PK' ? 'flat' : 'outlined'"
+                        :disabled="panelPlay.bases < 1 || panelPlay.bases > 3 || !!dpOutOf(panelPlay)"
+                        @click="togglePickoff(panelPlay)"
+                      >
+                        PK
+                      </v-chip>
+                      <v-chip
+                        size="small"
+                        label
+                        title="Out en doble play: lo forzaron en la jugada de un bateador posterior"
+                        :color="dpOutOf(panelPlay) ? 'error' : undefined"
+                        :variant="dpOutOf(panelPlay) ? 'flat' : 'outlined'"
+                        :disabled="turnIndex === null || !(dpOutOf(panelPlay) || (panelDpAvailable && !panelPlay.out_on_base))"
+                        @click="toggleRunnerDp"
+                      >
+                        DP
+                      </v-chip>
+                      <span class="text-caption text-grey-darken-1 ml-3 mr-1 steal-caption">Robó</span>
+                      <v-chip
+                        v-for="steal in STEALS"
+                        :key="steal.value"
+                        size="small"
+                        label
+                        :title="steal.title"
+                        :color="panelPlay.stolen_bases?.includes(steal.value) ? 'deep-purple' : undefined"
+                        :variant="panelPlay.stolen_bases?.includes(steal.value) ? 'flat' : 'outlined'"
+                        :disabled="!reachesBase(panelPlay)"
+                        @click="toggleSteal(panelPlay, steal.value)"
+                      >
+                        {{ steal.label }}
+                      </v-chip>
                     </div>
 
-                    <template v-if="panelPlay.out_on_base">
-                      <div class="play-panel__label">Out del corredor</div>
+                    <!-- Corredor out en un DP: su parte de la jugada (6-4, 5-4...) -->
+                    <template v-if="dpOutOf(panelPlay)">
+                      <div class="play-panel__label">Out en DP</div>
                       <div class="play-panel__options">
-                        <v-chip
-                          v-for="notation in RUNNER_OUTS"
-                          :key="notation.value"
-                          size="small"
-                          label
-                          :title="notation.title"
-                          :color="panelPlay.out_notation === notation.value ? 'error' : undefined"
-                          :variant="panelPlay.out_notation === notation.value ? 'flat' : 'outlined'"
-                          @click="panelPlay.out_notation = panelPlay.out_notation === notation.value ? '' : notation.value"
-                        >
-                          {{ notation.value }}
-                        </v-chip>
-                        <input v-model="panelPlay.out_notation" maxlength="20" placeholder="Otra..." class="notation-input" title="Cómo lo pusieron out" />
+                        <template v-for="(notation, notationIndex) in DP_RUNNER_NOTATIONS" :key="`${notation.group}-${notation.value}`">
+                          <span v-if="notation.group !== DP_RUNNER_NOTATIONS[notationIndex - 1]?.group" class="text-caption text-grey-darken-1 ml-1 mr-1">{{ notation.group }}</span>
+                          <v-chip
+                            size="small"
+                            label
+                            :title="notation.title"
+                            :color="panelPlay.dp_notation === notation.value ? 'error' : undefined"
+                            :variant="panelPlay.dp_notation === notation.value ? 'flat' : 'outlined'"
+                            @click="panelPlay.dp_notation = panelPlay.dp_notation === notation.value ? '' : notation.value"
+                          >
+                            {{ notation.group === 'Desatendido (U)' ? notation.value.slice(0, -1) : notation.value }}
+                          </v-chip>
+                        </template>
+                        <input v-model="panelPlay.dp_notation" maxlength="20" placeholder="Otra..." class="notation-input" :autocomplete="NO_AUTOFILL" title="Out del corredor en el doble play" />
                       </div>
+                    </template>
+
+                    <template v-if="panelPlay.out_on_base">
+                      <template v-if="panelPlay.out_type === 'PK'">
+                        <div class="play-panel__label">Revire</div>
+                        <div class="play-panel__options">
+                          <v-chip
+                            v-for="notation in PICKOFFS"
+                            :key="notation.value"
+                            size="small"
+                            label
+                            :title="notation.title"
+                            :color="panelPlay.out_notation === notation.value ? 'error' : undefined"
+                            :variant="panelPlay.out_notation === notation.value ? 'flat' : 'outlined'"
+                            @click="setOutNotation(panelPlay, notation.value, 'PK')"
+                          >
+                            {{ notation.value }}
+                          </v-chip>
+                          <input v-model="panelPlay.out_notation" maxlength="20" placeholder="1-3" class="notation-input" :autocomplete="NO_AUTOFILL" title="Secuencia del revire: 1-3, 1-6, 2-6, 1-6-4..." />
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div class="play-panel__label">Pisa y corre</div>
+                        <div class="play-panel__options">
+                          <span class="text-caption text-grey-darken-1 mr-1">Out en</span>
+                          <v-chip
+                            v-for="notation in TAG_OUTS"
+                            :key="notation.value"
+                            size="small"
+                            label
+                            :title="notation.title"
+                            :color="panelPlay.out_type === 'PC' && panelPlay.out_notation === notation.value ? 'error' : undefined"
+                            :variant="panelPlay.out_type === 'PC' && panelPlay.out_notation === notation.value ? 'flat' : 'outlined'"
+                            @click="setOutNotation(panelPlay, notation.value, 'PC')"
+                          >
+                            {{ notation.value }}
+                          </v-chip>
+                        </div>
+                        <div class="play-panel__label">Otro out</div>
+                        <div class="play-panel__options">
+                          <v-chip
+                            v-for="notation in RUNNER_OUTS"
+                            :key="notation.value"
+                            size="small"
+                            label
+                            :title="notation.title"
+                            :color="!panelPlay.out_type && panelPlay.out_notation === notation.value ? 'error' : undefined"
+                            :variant="!panelPlay.out_type && panelPlay.out_notation === notation.value ? 'flat' : 'outlined'"
+                            @click="setOutNotation(panelPlay, notation.value)"
+                          >
+                            {{ notation.value }}
+                          </v-chip>
+                          <input v-model="panelPlay.out_notation" maxlength="20" placeholder="Otra..." class="notation-input" :autocomplete="NO_AUTOFILL" title="Cómo lo pusieron out" />
+                        </div>
+                      </template>
 
                       <div class="play-panel__label">En el turno de</div>
                       <div class="play-panel__options">
@@ -458,176 +866,21 @@
                     <div class="play-panel__options">
                       <span class="text-caption text-grey-darken-1 mr-1">RBI</span>
                       <v-chip
-                        v-for="rbi in [1, 2, 3, 4]"
+                        v-for="rbi in [0, 1, 2, 3, 4]"
                         :key="rbi"
                         size="small"
                         label
-                        :color="toInt(panelPlay.rbi) === rbi ? 'success' : undefined"
-                        :variant="toInt(panelPlay.rbi) === rbi ? 'flat' : 'outlined'"
-                        @click="toggleRbi(panelPlay, rbi)"
+                        :color="panelPlay.result && toInt(panelPlay.rbi) === rbi ? 'success' : undefined"
+                        :variant="panelPlay.result && toInt(panelPlay.rbi) === rbi ? 'flat' : 'outlined'"
+                        :disabled="!panelPlay.result || (rbi === 0 && panelPlay.result === 'HR')"
+                        @click="setRbi(panelPlay, rbi)"
                       >
                         {{ rbi }}
                       </v-chip>
                     </div>
-                  </template>
                 </div>
-              </template>
-            </div>
-
-            <div class="box-wrap">
-              <table class="box-table box-table--lineup">
-                <thead>
-                  <tr>
-                    <th class="order">#</th>
-                    <th class="text-left player">Jugador</th>
-                    <th class="position">Pos</th>
-                    <template v-if="mode === 'scorecard'">
-                      <th
-                        v-for="inning in innings"
-                        :key="`inning-${inning}`"
-                        class="sc-inning"
-                        :class="`sc-inning--${inningState(battingSide, inning)}`"
-                        :title="INNING_STATES[inningState(battingSide, inning)]"
-                      >
-                        {{ inning }}
-                      </th>
-                    </template>
-                    <th v-for="column in battingColumns" :key="column.key" :title="column.title" :class="{ derived: column.derived }">{{ column.label }}</th>
-                    <th class="row-actions"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(line, index) in batting[battingSide]" :key="line.uid" class="lineup-row" :class="{ 'substitute-row': line.is_substitute }">
-                    <td class="order text-grey-darken-1">{{ line.is_substitute ? '' : slotNumber(index) }}</td>
-                    <td class="player">
-                      <div class="d-flex align-center">
-                        <v-icon v-if="line.is_substitute" icon="mdi-subdirectory-arrow-right" size="18" class="text-grey-darken-1 mr-1" title="Entró de cambio" />
-                        <v-autocomplete
-                          v-model="line.player_id"
-                          :items="playerOptions(line)"
-                          item-title="name"
-                          item-value="id"
-                          :placeholder="line.placeholder ? `${line.placeholder} (provisional)` : 'Selecciona jugador'"
-                          :title="!line.player_id && line.placeholder ? 'Bateador provisional: elige al jugador real cuando lo tengas' : ''"
-                          variant="outlined"
-                          density="compact"
-                          hide-details
-                          class="cell-field flex-grow-1"
-                          :class="{ 'cell-field--provisional': !line.player_id && line.placeholder }"
-                        />
-                        <v-select
-                          v-if="line.is_substitute"
-                          v-model="line.entered_inning"
-                          :items="enteredInningOptions"
-                          placeholder="Entró"
-                          title="Entrada en la que entró a jugar"
-                          variant="outlined"
-                          density="compact"
-                          hide-details
-                          class="cell-field entered-field ml-1"
-                          :error="mode === 'scorecard' && !line.entered_inning && line.plays.some(play => play.result)"
-                        />
-                      </div>
-                    </td>
-                    <td class="position">
-                      <v-select v-model="line.position" :items="positions" variant="outlined" density="compact" hide-details clearable class="cell-field" />
-                    </td>
-                    <template v-if="mode === 'scorecard'">
-                      <td
-                        v-for="inning in innings"
-                        :key="`inning-${inning}`"
-                        class="sc-cell"
-                        :class="[
-                          `sc-cell--${inningState(battingSide, inning)}`,
-                          {
-                            'sc-cell--active': panelTurn && panelTurn.line === line && panelTurn.inning === inning,
-                            'sc-cell--empty': cellPlays(line, inning).length === 0,
-                            'sc-cell--played': cellPlays(line, inning).length > 0,
-                            'sc-cell--unused': isUnusedCell(battingSide, line, inning),
-                            'sc-cell--next': nextUpCells.get(line)?.has(inning)
-                          }
-                        ]"
-                        :title="cellPlays(line, inning).length
-                          ? 'Ver este turno'
-                          : isUnusedCell(battingSide, line, inning) ? 'No bateó en esta entrada' : 'Los turnos se capturan en orden con Anterior / Siguiente'"
-                        @click="openTurn(line, inning)"
-                      >
-                        <div v-for="(play, playIndex) in cellPlays(line, inning)" :key="playIndex" class="sc-play" :class="{ 'sc-play--hit': isHit(play) }">
-                          <svg v-if="play.bases > 0" viewBox="0 0 20 20" class="sc-diamond" :class="{ 'sc-diamond--scored': play.bases === 4, 'sc-diamond--out': play.out_on_base }">
-                            <title>{{ basesTitle(play) }}</title>
-                            <polygon points="10,2 18,10 10,18 2,10" class="sc-diamond__field" />
-                            <polyline :points="DIAMOND_PATH.slice(0, play.bases + 1).join(' ')" class="sc-diamond__path" />
-                          </svg>{{ playLabel(play) }}<sup v-if="play.rbi" class="sc-rbi" :title="`${play.rbi} impulsada(s)`">{{ play.rbi }}</sup>
-                          <div v-if="play.out_on_base" class="sc-runner-out" :title="runnerOutTitle(play)">
-                            <v-icon icon="mdi-close" size="10" />{{ play.out_notation || 'Out' }}
-                          </div>
-                          <div v-else-if="isStranded(play)" class="sc-stranded" title="Se quedó en base al terminar la entrada">LOB</div>
-                          <div v-if="lobByPlay.get(play)" class="sc-lob" :title="`Hizo el tercer out y dejó ${lobByPlay.get(play)} en base`">
-                            Dejó {{ lobByPlay.get(play) }}
-                          </div>
-                        </div>
-                        <div
-                          v-if="nextUpCells.get(line)?.has(inning)"
-                          class="sc-next"
-                          :title="`Se quedó en turno al cerrar la entrada: abre la ${inning + 1}ª`"
-                        >
-                          <v-icon icon="mdi-arrow-right" size="12" />{{ inning + 1 }}ª
-                        </div>
-                      </td>
-                    </template>
-                    <td v-for="column in battingColumns" :key="column.key" :class="{ derived: column.derived }">
-                      <span v-if="column.derived" class="font-weight-bold">{{ statValue(line, column.key) }}</span>
-                      <input v-else v-model="line[column.key]" type="number" min="0" class="stat-input" />
-                    </td>
-                    <td class="row-actions text-no-wrap">
-                      <v-btn icon="mdi-arrow-up" size="x-small" variant="text" :disabled="index === 0" title="Subir en el orden al bat" @click="move(index, -1)" />
-                      <v-btn icon="mdi-arrow-down" size="x-small" variant="text" :disabled="index === batting[battingSide].length - 1" title="Bajar en el orden al bat" @click="move(index, 1)" />
-                      <v-btn icon="mdi-account-switch" size="x-small" variant="text" color="grey-darken-2" title="Agregar cambio" @click="addSubstitute(index)" />
-                      <!-- El primer bateador siempre es titular -->
-                      <v-btn
-                        :icon="line.is_substitute ? 'mdi-account-arrow-up' : 'mdi-subdirectory-arrow-right'"
-                        size="x-small"
-                        variant="text"
-                        color="grey-darken-2"
-                        :disabled="index === 0"
-                        :title="line.is_substitute ? 'Marcar como titular' : 'Marcar como cambio'"
-                        @click="line.is_substitute = !line.is_substitute"
-                      />
-                      <v-btn icon="mdi-close" size="x-small" variant="text" color="error" title="Quitar del lineup" @click="batting[battingSide].splice(index, 1)" />
-                    </td>
-                  </tr>
-                  <tr v-if="batting[battingSide].length === 0">
-                    <td :colspan="battingColumns.length + 4 + (mode === 'scorecard' ? innings : 0)" class="text-center text-grey-darken-1 pa-4">
-                      Sin bateadores. Usa <strong>Agregar bateador</strong> para armar el lineup.
-                    </td>
-                  </tr>
-                  <tr v-else class="totals-row">
-                    <td></td>
-                    <td class="text-left font-weight-bold">Totales</td>
-                    <td></td>
-                    <template v-if="mode === 'scorecard'">
-                      <td v-for="inning in innings" :key="`inning-${inning}`" class="font-weight-bold" :class="{ 'inning--pending': inningState(battingSide, inning) === 'pending' }" title="Carreras de la entrada">{{ inningRunsLabel(battingSide, inning) }}</td>
-                    </template>
-                    <td v-for="column in battingColumns" :key="column.key" class="font-weight-bold">{{ columnTotal(battingSide, column.key) }}</td>
-                    <td></td>
-                  </tr>
-                  <tr v-if="mode === 'scorecard' && batting[battingSide].length" class="totals-row lob-row">
-                    <td></td>
-                    <td class="text-left font-weight-bold" title="Dejados en base (Left On Base)">LOB</td>
-                    <td></td>
-                    <td
-                      v-for="inning in innings"
-                      :key="`lob-${inning}`"
-                      :class="{ 'inning--pending': inningState(battingSide, inning) !== 'played' }"
-                      :title="inningState(battingSide, inning) === 'played' ? 'Corredores que quedaron en base al terminar la entrada' : 'La entrada no ha terminado'"
-                    >
-                      {{ inningState(battingSide, inning) === 'played' ? inningLob(battingSide, inning) : '–' }}
-                    </td>
-                    <td :colspan="battingColumns.length" class="text-left font-weight-bold">{{ teamLob(battingSide) }} en el juego</td>
-                    <td></td>
-                  </tr>
-                </tbody>
-              </table>
+              <div v-else class="pa-3 text-body-2 text-grey-darken-1">Haz clic en una casilla de entrada para capturar la jugada.</div>
+            </aside>
             </div>
 
             <!-- En el Scorecard estos botones están en el panel de captura -->
@@ -653,18 +906,6 @@
               @click="openRosterDialog"
             >
               Agregar del roster
-            </v-btn>
-            <v-btn
-              v-if="batting[battingSide].length === 0"
-              size="small"
-              variant="outlined"
-              color="primary"
-              class="text-none font-weight-bold mt-3 ml-2"
-              prepend-icon="mdi-account-multiple-plus"
-              title="Agrega 9 bateadores provisionales para capturar sin el lineup; después eliges al jugador real de cada uno"
-              @click="addProvisionalLineup"
-            >
-              Lineup provisional (9)
             </v-btn>
             </template>
           </template>
@@ -711,6 +952,36 @@
         </v-card>
       </v-dialog>
 
+      <!-- Game Stats: estadísticas del jugador en el partido (como en The Perfect Boxscore) -->
+      <v-dialog v-model="gameStatsDialog" max-width="760px">
+        <v-card v-if="gameStatsLine && game" class="rounded-xl pa-2" theme="ejp">
+          <v-card-title class="d-flex align-center justify-space-between pt-4 px-4">
+            <span class="text-h6 font-weight-black text-grey-darken-4">Game Stats</span>
+            <v-btn icon="mdi-close" variant="text" density="comfortable" @click="gameStatsDialog = false" />
+          </v-card-title>
+          <v-card-text class="d-flex align-center ga-5">
+            <v-avatar size="96" color="grey-lighten-2" class="text-h5 font-weight-black text-grey-darken-2">
+              {{ initials(playerName(gameStatsLine)) }}
+            </v-avatar>
+            <div class="flex-grow-1">
+              <div class="text-h6 font-weight-black text-grey-darken-4">{{ playerName(gameStatsLine) }}</div>
+              <div class="text-body-2 text-grey-darken-1 mb-3">{{ gameStatsInfo }}</div>
+              <table class="box-table game-stats-table">
+                <thead>
+                  <tr><th v-for="column in SCORECARD_COLUMNS" :key="column.key" :title="column.title">{{ column.label }}</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td v-for="column in SCORECARD_COLUMNS" :key="column.key" class="font-weight-bold">{{ statValue(gameStatsLine, column.key) }}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </v-card-text>
+          <v-card-actions class="pa-4 pt-0 justify-end">
+            <v-btn color="black" variant="flat" class="text-capitalize rounded-pill px-5 font-weight-bold" @click="gameStatsDialog = false">Listo</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
       <!-- Roster del equipo: doble clic en un jugador para agregarlo al lineup -->
       <v-dialog v-model="rosterDialog" max-width="720px" scrollable>
         <v-card v-if="game" class="rounded-xl pa-2" theme="ejp">
@@ -724,6 +995,8 @@
           <v-card-text>
             <v-text-field
               v-model="rosterSearch"
+              :autocomplete="NO_AUTOFILL"
+              :name="fieldName('roster-search')"
               prepend-inner-icon="mdi-magnify"
               placeholder="Buscar jugador..."
               variant="outlined"
@@ -754,7 +1027,7 @@
               </v-data-table>
             </v-card>
             <div class="text-caption text-grey-darken-1 mt-2">
-              Si hay bateadores provisionales, el jugador ocupa el primero de ellos; si no, se agrega al final como titular.
+              Si hay turnos sin jugador, el jugador ocupa el primero de ellos; si no, se agrega al final como titular.
             </div>
           </v-card-text>
           <v-card-actions class="pa-4 pt-0 justify-end">
@@ -763,43 +1036,27 @@
         </v-card>
       </v-dialog>
 
-      <!-- Actions -->
-      <v-card-actions class="pa-4 pt-0 justify-end ga-2">
-        <v-btn variant="outlined" color="grey-darken-1" class="text-capitalize rounded-pill px-5" :disabled="saving" @click="dialog = false">
-          Cancelar
-        </v-btn>
-        <v-btn
-          color="black"
-          variant="flat"
-          class="text-capitalize rounded-pill px-5 font-weight-bold"
-          :loading="saving"
-          :disabled="!ready || tooManyStarters"
-          :title="tooManyStarters ? `Un equipo tiene más de ${MAX_STARTERS} titulares` : ''"
-          @click="handleSubmit"
-        >
-          Guardar Box Score
-        </v-btn>
-      </v-card-actions>
+      <!-- Sin Cancelar / Guardar: los cambios se guardan solos (ver la página GameBoxscore) -->
     </v-card>
-  </v-dialog>
+  </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { formatDate, formatTime } from '@/utils/dates'
 import { downloadFile } from '@/utils/download'
 import { getErrorMessage } from '@/utils/errors'
 import { useNotificationsStore } from '@/stores/notifications'
 
 const props = defineProps({
-  modelValue: Boolean,
   // Respuesta de GET /boxscore: { game, players, positions }
   boxscore: Object,
   loading: Boolean,
   saving: Boolean
 })
 
-const emit = defineEmits(['update:modelValue', 'save'])
+// change: el box score cambió; trae lo que hay que guardar (la página lo autoguarda)
+const emit = defineEmits(['change'])
 
 const SIDES = ['away', 'home']
 
@@ -892,6 +1149,57 @@ const withGaps = (notations, describe) => notations.flatMap((notation) => {
   return gap ? [notation, { value: gap.value, title: `${gap.value}: ${describe(gap.name)}` }] : [notation]
 })
 
+// Quién fildea y a quién tira (como en The Perfect Boxscore); "U" = desatendido (el mismo fildeador hace el out)
+const BASE_OF_GROUP = { 'Out en 1ra': 'primera', 'Cubriendo 1ra': 'primera', 'Forzado en 2da': 'segunda', 'En 3ra': 'tercera', 'En home': 'home' }
+const fieldingCodes = (group, codes, prefix = 'Rodado') => codes.map(code => ({
+  value: code,
+  group,
+  title: code.endsWith('U')
+    ? `${code}: ${prefix} ${FIELDERS[code[0]].a}, out desatendido`
+    : `${code}: ${prefix} ${FIELDERS[code[0]].a}, tira ${FIELDERS[code[code.length - 1]].a}: out en ${BASE_OF_GROUP[group]}`
+}))
+
+// Rodado (y la parte del bateador en un DP): el bateador solo puede ser out en primera
+const GROUND_OUTS = [
+  ...fieldingCodes('Out en 1ra', ['1-3', '2-3', '4-3', '5-3', '6-3', '7-3', '8-3', '9-3']),
+  ...fieldingCodes('Cubriendo 1ra', ['3-1', '4-1', '3-4']),
+  ...fieldingCodes('Desatendido (U)', ['1U', '2U', '3U', '4U', '5U', '6U'])
+]
+
+// Out del corredor en un doble play (en su propio turno): forzado en otra base
+const DP_RUNNER_NOTATIONS = [
+  ...fieldingCodes('Forzado en 2da', ['1-4', '1-6', '2-4', '2-6', '3-6', '4-6', '5-4', '5-6', '6-4'], 'Corredor out: rodado'),
+  ...fieldingCodes('En 3ra', ['1-5', '2-5', '3-5', '4-5', '6-5'], 'Corredor out: rodado'),
+  ...fieldingCodes('En home', ['1-2', '3-2', '4-2', '5-2', '6-2'], 'Corredor out: rodado'),
+  ...fieldingCodes('Desatendido (U)', ['1U', '2U', '4U', '5U', '6U'], 'Corredor out: rodado')
+]
+
+// Out en base en pisa y corre: tiro de un jardinero (7, 8, 9) a una posición del cuadro del 1 al 4 (7-2: el izquierdo tira a home)
+const TAG_OUTS = [7, 8, 9].flatMap(outfielder => [1, 2, 3, 4].map(infielder => ({
+  value: `${outfielder}-${infielder}`,
+  title: `Out en pisa y corre: ${FIELDERS[outfielder].el} tira ${FIELDERS[infielder].a}`
+})))
+
+// Secuencias de revire (pickoff) más comunes
+const PICKOFFS = withTitles([
+  ['1-3', 'El pitcher sorprende al corredor de primera'],
+  ['1-6', 'El pitcher sorprende al corredor de segunda (cubre el short)'],
+  ['1-4', 'El pitcher sorprende al corredor de segunda (cubre segunda base)'],
+  ['2-3', 'El catcher sorprende al corredor de primera'],
+  ['2-6', 'El catcher sorprende al corredor de segunda'],
+  ['1-6-4', 'Revire con corretiza entre bases']
+])
+
+// Bases robadas en el turno: base que se robó -> etiqueta (SB H = robo de home)
+const STEALS = [
+  { value: 2, label: 'SB 2', short: '2', title: 'Robo de segunda base' },
+  { value: 3, label: 'SB 3', short: '3', title: 'Robo de tercera base' },
+  { value: 4, label: 'SB H', short: 'H', title: 'Robo de home' }
+]
+
+// Número de out encerrado en círculo (DP②)
+const CIRCLED = { 1: '①', 2: '②', 3: '③' }
+
 // Anotaciones de scorebook sugeridas por jugada, ordenadas por posición.
 // En los hits la anotación es hacia dónde fue la bola y la casilla muestra p. ej. 1B-8 o HR-78
 const NOTATIONS = {
@@ -900,33 +1208,12 @@ const NOTATIONS = {
   '2B': withGaps(byPosition('', f => `Doble ${f.a}`, [5, 7, 8, 9]), gap => `Doble ${gap}`),
   '3B': withGaps(byPosition('', f => `Triple ${f.a}`, [7, 8, 9]), gap => `Triple ${gap}`),
   HR: withGaps(byPosition('', f => `Home run por ${f.a.replace(/^a(l)? /, 'e$1 ')}`, [7, 8, 9]), gap => `Home run ${gap}`),
-  GO: withTitles([
-    ['1-3', 'Rodado al pitcher, out en primera'],
-    ['3U', 'Rodado a primera, out sin asistencia'],
-    ['3-1', 'Rodado a primera, out con el pitcher cubriendo'],
-    ['4-3', 'Rodado a segunda, out en primera'],
-    ['4-6', 'Rodado a segunda, out forzado en segunda'],
-    ['5-3', 'Rodado a tercera, out en primera'],
-    ['6-3', 'Rodado al short, out en primera'],
-    ['6-4', 'Rodado al short, out forzado en segunda']
-  ]),
+  GO: GROUND_OUTS,
   FO: byPosition('F', f => `Fly/Elevado ${f.a}`),
-  LO: byPosition('L', f => `Línea ${f.a}`),
-  // Secuencia completa del doble play; el out del corredor se anota también en su casilla (6-5)
-  DP: withTitles([
-    ['1-2-3', 'Doble play: pitcher a home, catcher a primera'],
-    ['1-6-3', 'Doble play: pitcher a segunda, short a primera'],
-    ['3-6-1', 'Doble play: primera a segunda, el pitcher cubre primera'],
-    ['3-6-3', 'Doble play: primera a segunda, short a primera'],
-    ['4-4-3', 'Doble play: segunda pisa la base y tira a primera'],
-    ['4-6-3', 'Doble play: segunda al short, short a primera'],
-    ['5-2-3', 'Doble play: tercera a home, catcher a primera'],
-    ['5-4-3', 'Doble play: tercera a segunda, segunda a primera'],
-    ['5-5-3', 'Doble play: tercera pisa la base y tira a primera'],
-    ['6-4-3', 'Doble play: short a segunda, segunda a primera'],
-    ['6-5-3', 'Doble play: short a tercera, tercera a primera'],
-    ['6-6-3', 'Doble play: short pisa segunda y tira a primera']
-  ]),
+  // Línea de out: solo la atrapa el cuadro, sin el catcher (1, 3, 4, 5, 6)
+  LO: byPosition('L', f => `Línea ${f.a}`, [1, 3, 4, 5, 6]),
+  // En el DP del bateador se anota su parte (4-3); la del corredor (6-4) va en la casilla del corredor
+  DP: GROUND_OUTS,
   FC: byPosition('FC', f => `Bola ocupada, la fildea ${f.el}`, [1, 2, 3, 4, 5, 6]),
   ROE: byPosition('E', f => `Error ${f.de}`),
   SF: byPosition('SF', f => `Elevado de sacrificio ${f.a}`, [7, 8, 9]),
@@ -956,15 +1243,19 @@ const RESULT_STATS = {
   KDC: ['so_looking', 'so'],
   SF: ['sf'],
   SH: ['sh'],
-  ROE: ['roe']
+  ROE: ['roe'],
+  // Bateó para doble play (GIDP)
+  DP: ['gidp']
 }
 const NOT_AT_BAT = ['BB', 'IBB', 'HBP', 'SF', 'SH']
 
-// Outs que hace cada jugada; las que no aparecen dejan al bateador en base
-const OUTS = { KS: 1, KC: 1, GO: 1, FO: 1, LO: 1, DP: 2, FC: 1, SF: 1, SH: 1 }
+// Outs de la jugada del bateador (reglas de The Perfect Boxscore). En un DP es solo el del bateador: el del
+// corredor se suma cuando se indica quién fue. En la bola ocupada (FC) el bateador se embasa y no hay out del
+// bateador: el corredor puesto out se marca como "Out en base" (o con "Corredor out" en el panel del FC)
+const OUTS = { KS: 1, KC: 1, GO: 1, FO: 1, LO: 1, SF: 1, SH: 1, DP: 1 }
 
-// De esos outs, los que son de un corredor (en DP el corredor y el bateador; en FC solo el corredor)
-const RUNNER_OUTS_IN_PLAY = { DP: 1, FC: 1 }
+// Jugadas en que se puede marcar desde el panel al corredor que pusieron out (queda como su "Out en base")
+const RUNNER_OUTS_IN_PLAY = { FC: 1 }
 
 // Jugadas en que el bateador se embasa y la base a la que llega de entrada (luego puede avanzar)
 const START_BASE = { '1B': 1, IH: 1, '2B': 2, '3B': 3, HR: 4, BB: 1, IBB: 1, HBP: 1, KDS: 1, KDC: 1, FC: 1, ROE: 1 }
@@ -976,8 +1267,6 @@ const BASES = [
   { value: 4, label: 'Home', title: 'Llegó a home: anotó carrera' }
 ]
 
-// Vértices del diamante en orden de corrido: home, primera, segunda, tercera, home
-const DIAMOND_PATH = ['10,18', '18,10', '10,2', '2,10', '10,18']
 
 // Outs del corredor en las bases (CS = atrapado robando, PO = pick-off), ordenados por quien inicia la jugada
 const RUNNER_OUTS = [
@@ -989,14 +1278,10 @@ const RUNNER_OUTS = [
   ['5-4', 'Out en segunda: de tercera a segunda base'],
   ['6-4', 'Out en segunda: del short a segunda base'],
   ['6-5', 'Out en tercera: del short a tercera'],
-  ['7-2', 'Out en home: tiro del jardín izquierdo'],
-  ['8-2', 'Out en home: tiro del jardín central'],
-  ['9-2', 'Out en home: tiro del jardín derecho'],
   ['CS2-4', 'Atrapado robando segunda: del catcher a segunda base'],
   ['CS2-6', 'Atrapado robando segunda: del catcher al short'],
-  ['CS2-5', 'Atrapado robando tercera: del catcher a tercera'],
-  ['PO1-3', 'Pick-off en primera: del pitcher a primera'],
-  ['PO2-6', 'Pick-off en segunda: del catcher al short']
+  ['CS2-5', 'Atrapado robando tercera: del catcher a tercera']
+  // Los tiros de jardineros (7-2) van en "Pisa y corre" y los pick-offs en "PK", como en The Perfect Boxscore
 ].map(([value, title]) => ({ value, title: `${value}: ${title}` }))
 
 // Columnas de bateo; derived = se calcula a partir de otras
@@ -1031,7 +1316,7 @@ const FULL_COLUMNS = [
   { key: 'lob', label: 'LOB', title: 'Corredores que dejó en base al hacer el tercer out' }
 ]
 
-// En el scorecard todo el bateo se calcula de los turnos
+// En el scorecard todo el bateo se calcula de los turnos; mismas estadísticas por jugador que The Perfect Boxscore
 const SCORECARD_COLUMNS = [
   { key: 'ab', label: 'AB', title: 'Turnos oficiales al bat', derived: true },
   { key: 'r', label: 'R', title: 'Carreras anotadas', derived: true },
@@ -1039,7 +1324,11 @@ const SCORECARD_COLUMNS = [
   { key: 'rbi', label: 'RBI', title: 'Carreras impulsadas', derived: true },
   { key: 'bb', label: 'BB', title: 'Bases por bolas', derived: true },
   { key: 'so', label: 'K', title: 'Ponches', derived: true },
-  { key: 'lob', label: 'LOB', title: 'Corredores que dejó en base al hacer el tercer out', derived: true }
+  { key: 'sb', label: 'SB', title: 'Bases robadas', derived: true },
+  { key: 'pk', label: 'PK', title: 'Outs por revire (pickoff)', derived: true },
+  { key: 'gidp', label: 'DP', title: 'Bateó para doble play', derived: true },
+  { key: 'lob', label: 'LOB', title: 'Veces que se quedó en base al terminar la entrada', derived: true },
+  { key: 'avg', label: 'AVG', title: 'Promedio de bateo (H / AB)', derived: true, rate: true }
 ]
 
 // Glosario: jugadas, posiciones, anotaciones, la casilla del scorecard y las columnas de bateo
@@ -1073,23 +1362,32 @@ const GLOSSARY = [
       { term: 'E6', meaning: 'Error del fildeador indicado' },
       { term: 'WP / PB', meaning: 'Wild pitch del pitcher / passed ball del catcher' },
       { term: 'CS2-6', meaning: 'Atrapado robando: del catcher al short' },
-      { term: 'PO1-3', meaning: 'Pick-off: del pitcher a primera' }
+      { term: 'PK 1-3', meaning: 'Pick-off (revire): del pitcher a primera' },
+      { term: 'PC 7-2', meaning: 'Pisa y corre: el jardinero izquierdo tira a home' }
     ]
   },
   {
     title: 'Casilla del scorecard',
     entries: [
-      { term: '◇', meaning: 'Corrido del bateador: hasta qué base llegó (relleno verde si anotó)' },
+      { term: '◇', meaning: 'Corrido del bateador: hasta qué base llegó (relleno verde si anotó; tramo morado si robó esa base)' },
+      { term: '•', meaning: 'Base en la que se quedó (naranja si se quedó en base al terminar la entrada)' },
       { term: '¹ ² ³', meaning: 'Carreras impulsadas en el turno' },
+      { term: 'SB2·3', meaning: 'Bases que robó en el turno (H = home)' },
+      { term: '4-3 DP', meaning: 'Bateó para doble play: su parte de la jugada' },
+      { term: '6-4 DP②', meaning: 'Corredor puesto out en el doble play y el número de out' },
+      { term: 'PK 1-3', meaning: 'Out por revire (pickoff) y su secuencia' },
+      { term: 'PC 7-2', meaning: 'Out en base en pisa y corre: tiro del jardinero al cuadro' },
       { term: '× 6-4', meaning: 'Lo pusieron out en las bases y cómo' },
       { term: 'LOB', meaning: 'Se quedó en base al terminar la entrada' },
-      { term: 'Dejó 2', meaning: 'Hizo el tercer out y dejó ese número de corredores en base' },
+      { term: '→ 4ª', meaning: 'Se terminó la entrada con él en turno: abre la siguiente' },
+      { term: '▨', meaning: 'Casilla sin usar: la entrada se cerró antes de su turno o el jugador no estaba en el juego' },
       { term: '↳', meaning: 'Cambio: entró en el turno al bat del jugador de arriba' }
     ]
   },
   {
     title: 'Columnas de bateo',
-    entries: [...FULL_COLUMNS, { label: 'E', title: 'Errores a la defensiva' }].map(column => ({ term: column.label, meaning: column.title }))
+    entries: [...FULL_COLUMNS, ...SCORECARD_COLUMNS.filter(column => ['sb', 'pk', 'gidp', 'avg'].includes(column.key)), { label: 'E', title: 'Errores a la defensiva' }]
+      .map(column => ({ term: column.label, meaning: column.key === 'lob' ? 'Dejados en base (en el scorecard: veces que se quedó en base al terminar la entrada)' : column.title }))
   },
   {
     title: 'Marcador',
@@ -1116,12 +1414,21 @@ const exportGlossary = async () => {
   }
 }
 
-const STATS = ['pa', 'ab', 'r', 'h', 'singles', 'ih', 'doubles', 'triples', 'hr', 'rbi', 'bb', 'ibb', 'hbp', 'sf', 'sh', 'roe', 'so', 'so_swinging', 'so_looking', 'lob', 'e']
+// Sin autocompletado del navegador: Chrome ignora autocomplete="off" y sugiere usuarios / correos guardados (empata los
+// campos por name o id, y Vuetify repite ids como input-v-78 en otros formularios). Un valor no estándar evita que los
+// clasifique como usuario o correo y un name distinto en cada carga evita que empate con lo guardado
+const NO_AUTOFILL = 'ejp-no-autofill'
+const NAME_SEED = Date.now().toString(36)
+const fieldName = key => `bx-${key}-${NAME_SEED}`
 
-const dialog = computed({
-  get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val)
-})
+const STATS = ['pa', 'ab', 'r', 'h', 'singles', 'ih', 'doubles', 'triples', 'hr', 'rbi', 'bb', 'ibb', 'hbp', 'sf', 'sh', 'roe', 'so', 'so_swinging', 'so_looking', 'sb', 'pk', 'gidp', 'lob', 'e']
+
+// Formato beisbolero: .288, 1.000
+const formatRate = value => {
+  const text = value.toFixed(3)
+  return text.startsWith('0') ? text.slice(1) : text
+}
+
 
 const mode = ref('score')
 const totals = ref({ away: {}, home: {} })
@@ -1165,6 +1472,8 @@ const exportBoxscore = async (team) => {
   }
 }
 const positions = computed(() => props.boxscore?.positions || [])
+// Combo Pos: "—" quita la posición
+const positionOptions = computed(() => [{ title: '—', value: null }, ...positions.value.map(position => ({ title: position, value: position }))])
 const currentMode = computed(() => MODES.find(item => item.value === mode.value))
 const isBatting = computed(() => ['batting', 'batting_full', 'scorecard'].includes(mode.value))
 const battingColumns = computed(() => ({ batting_full: FULL_COLUMNS, scorecard: SCORECARD_COLUMNS })[mode.value] || BASIC_COLUMNS)
@@ -1174,10 +1483,21 @@ const innings = computed(() => lineScore.value.away.length)
 const teamOf = side => side === 'away' ? game.value.away_team : game.value.home_team
 const teamIdOf = side => side === 'away' ? game.value.away_team_id : game.value.home_team_id
 
-const players = computed(() => (props.boxscore?.players || []).map(player => ({
-  id: player.id,
-  name: [player.first_name, player.last_name, player.second_last_name].filter(Boolean).join(' ')
-})))
+// Jugadores como "Apellidos Nombres" (apellido paterno, materno y nombres), ordenados por apellidos
+const players = computed(() => (props.boxscore?.players || [])
+  .map(player => ({
+    id: player.id,
+    name: [player.last_name, player.second_last_name, player.first_name].filter(Boolean).join(' ')
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })))
+
+// Búsqueda del combo de jugador: cada palabra escrita debe aparecer en el nombre, en cualquier orden y sin importar
+// acentos ni mayúsculas ("carlos flores" encuentra a "Flores Figueroa Carlos Adrián")
+const normalizeText = text => String(text ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const playerFilter = (value, query) => {
+  const name = normalizeText(value)
+  return normalizeText(query).split(/\s+/).filter(Boolean).every(word => name.includes(word))
+}
 
 let uid = 0
 const newLine = (data = {}) => ({
@@ -1199,9 +1519,18 @@ const newLine = (data = {}) => ({
     scored: !!play.scored,
     out_on_base: !!play.out_on_base,
     out_notation: play.out_notation ?? '',
+    // PK revire, PC pisa y corre (null = otro out en base)
+    out_type: play.out_type ?? null,
     // Renglón del bateador en cuyo turno lo pusieron out (se resuelve al cargar el lineup)
     out_during: null,
-    out_during_order: play.out_during_order ?? null
+    out_during_order: play.out_during_order ?? null,
+    // Bases robadas en el turno (2, 3, 4)
+    stolen_bases: String(play.stolen_bases ?? '').split(',').map(Number).filter(base => [2, 3, 4].includes(base)),
+    // DP del bateador: renglón del corredor que fue el otro out (se resuelve al cargar el lineup)
+    dp_runner: null,
+    dp_runner_order: play.dp_runner_order ?? null,
+    // Turno del corredor out en un DP: su parte de la jugada (6-4)
+    dp_notation: play.dp_notation ?? ''
   })),
   ...Object.fromEntries(STATS.map(key => [key, data[key] ?? 0]))
 })
@@ -1227,8 +1556,11 @@ watch(() => props.boxscore, (data) => {
   for (const side of SIDES) {
     for (const play of batting.value[side].flatMap(line => line.plays)) {
       play.out_during = play.out_during_order ? batting.value[side][play.out_during_order - 1] || null : null
+      play.dp_runner = play.dp_runner_order ? batting.value[side][play.dp_runner_order - 1] || null : null
     }
   }
+  if (mode.value === 'scorecard') fillLineup()
+  resetHistory()
   battingSide.value = 'away'
   closedInnings.value = { away: [], home: [] }
   turnIndex.value = null
@@ -1241,8 +1573,9 @@ const toInt = value => Number.parseInt(value, 10) || 0
 const inningRuns = side => lineScore.value[side].reduce((sum, value) => sum + toInt(value), 0)
 
 // Al salir de una modalidad que calcula el marcador, lo calculado pasa al marcador editable
-watch(mode, (_, previous) => {
+watch(mode, (current, previous) => {
   if (!ready.value) return
+  if (current === 'scorecard') fillLineup()
   for (const side of SIDES) {
     if (previous === 'linescore') totals.value[side].r = inningRuns(side)
     if (previous === 'scorecard') {
@@ -1290,10 +1623,20 @@ const addBatter = () => {
   lines.push(newLine({ placeholder: `Bateador ${lines.filter(line => !line.is_substitute).length + 1}` }))
 }
 
-// Nueve bateadores provisionales para capturar en vivo sin tener el lineup
-const addProvisionalLineup = () => {
-  batting.value[battingSide.value].push(...Array.from({ length: 9 }, (_, index) => newLine({ placeholder: `Bateador ${index + 1}` })))
+// Como en The Perfect Boxscore, el scorecard abre con los 9 turnos del lineup. Los que faltan se agregan vacíos
+// (sin jugador ni nombre provisional): se ven como "Bateador N" y solo se guardan si se usan
+const LINEUP_SIZE = 9
+const fillLineup = () => {
+  for (const side of SIDES) {
+    const lines = batting.value[side]
+    const starters = lines.filter(line => !line.is_substitute).length
+    for (let index = starters; index < LINEUP_SIZE; index++) lines.push(newLine())
+  }
 }
+
+// Renglón agregado por default que no se ha usado: sin jugador, sin nombre provisional, sin turnos ni estadísticas
+const isBlankLine = line => !line.player_id && !line.placeholder
+  && !line.plays.some(play => play.result) && STATS.every(key => !toInt(line[key]))
 
 // ---------- AGREGAR DEL ROSTER ----------
 const ROSTER_HEADERS = [
@@ -1327,11 +1670,27 @@ const addFromRoster = (player) => {
 const MAX_STARTERS = 9
 
 // Titulares de cada equipo que se guardarían (los renglones sin jugador ni nombre no se guardan)
-const startersCount = side => batting.value[side].filter(line => !line.is_substitute && (line.player_id || line.placeholder)).length
+const startersCount = side => batting.value[side].filter(line => !line.is_substitute && !isBlankLine(line)).length
+
+// Renglones que se guardan: hasta el último que se usó (los turnos vacíos del final no se guardan). Un turno vacío
+// intermedio o uno usado sin jugador se guarda con su nombre provisional "Bateador N" para conservar el orden al bat
+const linesToSave = (side) => {
+  const lines = batting.value[side]
+  let last = lines.length - 1
+  while (last >= 0 && isBlankLine(lines[last])) last--
+  return lines.slice(0, last + 1)
+}
+const savedPlaceholder = (side, line) => {
+  if (line.player_id) return null
+  if (line.placeholder) return line.placeholder
+  const index = batting.value[side].indexOf(line)
+  return line.is_substitute ? `Cambio ${index + 1}` : `Bateador ${batting.value[side].slice(0, index + 1).filter(item => !item.is_substitute).length}`
+}
 
 const tooManyStarters = computed(() => isBatting.value && SIDES.some(side => startersCount(side) > MAX_STARTERS))
 
-const provisionalCount = computed(() => batting.value[battingSide.value].filter(line => !line.player_id).length)
+// Bateadores con nombre provisional o ya usados sin jugador asignado (los 9 turnos vacíos por default no cuentan)
+const provisionalCount = computed(() => batting.value[battingSide.value].filter(line => !line.player_id && !isBlankLine(line)).length)
 
 // Turno al bat del renglón: los cambios comparten el turno del titular que reemplazan
 const slotNumber = index => batting.value[battingSide.value].slice(0, index + 1).filter(line => !line.is_substitute).length
@@ -1358,12 +1717,24 @@ const derivedValue = (line, key) => key === 'h'
   : toInt(line.so_swinging) + toInt(line.so_looking)
 
 const statValue = (line, key) => {
-  if (mode.value === 'scorecard') return key === 'lob' ? lineLob(line) : playStats(line)[key] ?? toInt(line[key])
+  if (mode.value === 'scorecard') {
+    if (key === 'lob') return lineLob(line)
+    const stats = playStats(line)
+    if (key === 'avg') return formatRate(stats.ab ? stats.h / stats.ab : 0)
+    return stats[key] ?? toInt(line[key])
+  }
   if (mode.value === 'batting_full' && (key === 'h' || key === 'so')) return derivedValue(line, key)
   return toInt(line[key])
 }
 
-const columnTotal = (side, key) => batting.value[side].reduce((sum, line) => sum + statValue(line, key), 0)
+// AVG del equipo: H / AB de los totales
+const columnTotal = (side, key) => {
+  if (key === 'avg') {
+    const ab = columnTotal(side, 'ab')
+    return formatRate(ab ? columnTotal(side, 'h') / ab : 0)
+  }
+  return batting.value[side].reduce((sum, line) => sum + statValue(line, key), 0)
+}
 
 // Total de una columna con lo que ya trae cada renglón (tras copiar lo calculado)
 const columnTotalFrom = (side, key) => batting.value[side].reduce((sum, line) => sum + toInt(line[key]), 0)
@@ -1385,20 +1756,167 @@ const setBases = (play, bases) => {
 const setOutOnBase = (play, value) => {
   play.out_on_base = value
   if (!value) {
+    // Ya no fue out: tampoco por revire ni en pisa y corre
     play.out_notation = ''
+    play.out_type = null
     play.out_during = null
   }
 }
 
+// PK: out en base por revire (marca también "Out en base")
+const togglePickoff = (play) => {
+  if (play.out_on_base && play.out_type === 'PK') {
+    play.out_type = null
+    play.out_notation = ''
+    return
+  }
+  play.out_on_base = true
+  play.out_type = 'PK'
+  play.out_notation = ''
+}
+
+// Notación del out en base: PC (pisa y corre) u otra; con la misma se desmarca
+const setOutNotation = (play, notation, type = null) => {
+  const same = play.out_notation === notation && play.out_type === type
+  play.out_notation = same ? '' : notation
+  play.out_type = same ? null : type
+}
+
+// Robo de base: el robo lo deja al menos en esa base (SB H = anotó)
+const toggleSteal = (play, base) => {
+  const steals = new Set(play.stolen_bases)
+  if (steals.has(base)) steals.delete(base)
+  else {
+    steals.add(base)
+    if (play.bases < base) setBases(play, base)
+  }
+  play.stolen_bases = [...steals].sort()
+}
+
 const runnerOutTitle = (play) => {
   const during = play.out_during ? ` en el turno de ${playerName(play.out_during)}` : ''
+  if (play.out_type === 'PK') return `Out por revire${play.out_notation ? ` (PK ${play.out_notation})` : ''}${during}`
+  if (play.out_type === 'PC') return `Out en pisa y corre${play.out_notation ? ` (${play.out_notation})` : ''}${during}`
   return `Out en base${play.out_notation ? ` (${play.out_notation})` : ''}${during}`
+}
+
+// Texto del out en base en la casilla: PK 1-3, PC 7-2 u otra anotación
+const runnerOutLabel = (play) => {
+  if (play.out_type === 'PK') return play.out_notation ? `PK ${play.out_notation}` : 'PK'
+  if (play.out_type === 'PC') return play.out_notation ? `PC ${play.out_notation}` : 'PC'
+  return play.out_notation || 'Out'
 }
 
 const basesTitle = (play) => {
   if (play.bases === 4) return 'Anotó carrera'
   const base = BASES.find(item => item.value === play.bases)?.title || ''
+  if (dpOutOf(play)) return `${base}; después fue out en doble play`
   return play.out_on_base ? `${base}; después lo pusieron out` : base
+}
+
+// ---------- Reglas de The Perfect Boxscore ----------
+// Corredores puestos out en un doble play (turno del corredor => { out: número de out, line: bateador del DP })
+const dpOuts = computed(() => {
+  const result = new Map()
+  for (const side of SIDES) {
+    for (const [play, info] of turnSequence(side).dpOuts) result.set(play, info)
+  }
+  return result
+})
+
+const dpOutOf = play => dpOuts.value.get(play)
+
+// Sigue en base (1ra a 3ra) sin anotar ni ser out (en base o en un doble play)
+const onBase = play => play.bases >= 1 && play.bases <= 3 && !play.out_on_base && !dpOutOf(play)
+
+// "6-4 DP②" en la casilla del corredor puesto out en un doble play
+const dpLabel = (play) => {
+  const info = dpOutOf(play)
+  if (!info) return ''
+  const dp = `DP${CIRCLED[info.out] || ''}`
+  return play.dp_notation ? `${play.dp_notation} ${dp}` : dp
+}
+
+// SB2·3 en la casilla
+const stealsLabel = play => play.stolen_bases?.length
+  ? `SB${STEALS.filter(steal => play.stolen_bases.includes(steal.value)).map(steal => steal.short).join('·')}`
+  : ''
+
+// Estilo de la casilla como en The Perfect Boxscore: hit, anotó, out, en base, out en base
+const playStyle = (play) => {
+  if (dpOutOf(play) || play.out_on_base) return 'out-on-base'
+  if (play.bases === 4) return 'scored'
+  if (play.bases >= 1 && play.bases <= 3) return isHit(play) ? 'hit' : 'on-base'
+  return 'out'
+}
+
+// Vértices del diamante en orden de corrido: home, primera, segunda, tercera, home
+const DIAMOND_POINTS = [[10, 18], [18, 10], [10, 2], [2, 10], [10, 18]]
+const diamondSegments = play => Array.from({ length: Math.min(play.bases, 4) }, (_, index) => ({
+  from: DIAMOND_POINTS[index],
+  to: DIAMOND_POINTS[index + 1],
+  stolen: play.stolen_bases?.includes(index + 1)
+}))
+const diamondBase = play => DIAMOND_POINTS[play.bases]
+
+// Bateadores que pudieron ser el otro out del DP del turno del panel: turnos anteriores de la entrada que seguían en base
+const dpCandidates = (turnIdx) => {
+  const turns = sequence.value.turns
+  const turn = turns[turnIdx]
+  if (!turn) return []
+  const own = turn.play.result === 'DP' ? turn.play.dp_runner : null
+  const found = new Map()
+  for (const candidate of turns.slice(0, turnIdx).filter(item => item.inning === turn.inning)) {
+    const info = dpOutOf(candidate.play)
+    const mine = info && info.line === turn.line && candidate.line === own
+    if (onBase(candidate.play) || mine) found.set(candidate.line, candidate)
+    else found.delete(candidate.line)
+  }
+  return [...found.values()]
+}
+
+// Turno del bateador que bateó el DP en el que el corredor del panel pudo ser el otro out
+// (el primero de la entrada que no tenga ya a otro corredor)
+const dpBatterFor = (turnIdx) => {
+  const turns = sequence.value.turns
+  const runner = turns[turnIdx]
+  if (!runner) return -1
+  for (let index = turnIdx + 1; index < turns.length && turns[index].inning === runner.inning; index++) {
+    const play = turns[index].play
+    if (play.result === 'DP' && (!play.dp_runner || play.dp_runner === runner.line)
+      && dpCandidates(index).some(candidate => candidate.line === runner.line)) return index
+  }
+  return -1
+}
+
+// Botón DP en el turno del corredor: lo enlaza (o desenlaza) como el otro out del DP del bateador posterior
+const toggleRunnerDp = () => {
+  const runner = panelTurn.value
+  const info = dpOutOf(runner.play)
+  if (info) {
+    const batter = sequence.value.turns.find(turn => turn.line === info.line && turn.inning === runner.inning && turn.play.dp_runner === runner.line)
+    if (batter) batter.play.dp_runner = null
+    return
+  }
+  const index = dpBatterFor(turnIndex.value)
+  if (index !== -1) sequence.value.turns[index].play.dp_runner = runner.line
+}
+
+// Base por bolas por la cuenta: el bateador llega a 1ra y avanzan los corredores forzados
+// (1ra→2da; si también hay en 2da, 2da→3ra; con casa llena el de 3ra anota y el bateador lleva 1 RBI)
+const applyWalk = (play, inning, turnsBefore) => {
+  const runners = new Map()
+  for (const turn of turnsBefore.filter(item => item.inning === inning)) {
+    if (onBase(turn.play)) runners.set(turn.play.bases, turn.play)
+  }
+  const forced = []
+  for (const base of [1, 2, 3]) {
+    if (!runners.has(base)) break
+    forced.push(base)
+  }
+  // Se mueve primero el corredor más adelantado
+  for (const base of [...forced].reverse()) setBases(runners.get(base), base + 1)
+  if (forced.includes(3)) play.rbi = Math.max(toInt(play.rbi), 1)
 }
 
 const resultLabel = result => RESULTS.find(item => item.value === result)?.label || result || '?'
@@ -1415,17 +1933,20 @@ const playLabel = (play) => {
 
 const playerName = line => players.value.find(player => player.id === line.player_id)?.name
   || line.placeholder
-  || `Bateador ${batting.value[battingSide.value].indexOf(line) + 1}`
+  || savedPlaceholder(SIDES.find(side => batting.value[side].includes(line)) || battingSide.value, line)
 
-// Bateo de un renglón a partir de sus turnos (sin E, que es defensivo)
+// Bateo de un renglón a partir de sus turnos (sin E, que es defensivo), con las reglas de The Perfect Boxscore:
+// SB bases robadas, PK outs por revire, DP (gidp) bateó para doble play
 const playStats = (line) => {
-  const stats = Object.fromEntries(STATS.filter(key => key !== 'e').map(key => [key, 0]))
+  const stats = Object.fromEntries(STATS.filter(key => key !== 'e' && key !== 'lob').map(key => [key, 0]))
   for (const play of line.plays.filter(item => item.result)) {
     stats.pa++
     if (!NOT_AT_BAT.includes(play.result)) stats.ab++
     for (const key of RESULT_STATS[play.result] || []) stats[key]++
     stats.rbi += toInt(play.rbi)
     if (play.scored || play.result === 'HR') stats.r++
+    stats.sb += play.stolen_bases?.length || 0
+    if (play.out_on_base && play.out_type === 'PK') stats.pk++
   }
   return stats
 }
@@ -1462,30 +1983,16 @@ const inningRunsLabel = (side, inning) => {
   return side === 'home' && inning === innings.value && awayFinished ? 'X' : '–'
 }
 
-// Dejados en base: corredores que llegaron a 1ra, 2da o 3ra y no anotaron ni fueron puestos out.
+// Dejados en base: corredores que llegaron a 1ra, 2da o 3ra y no anotaron ni fueron puestos out (en base o en DP).
 // Solo cuentan las entradas que ya terminaron (la que está en juego aún puede cambiar)
 const inningLob = (side, inning) => batting.value[side]
   .flatMap(line => line.plays)
-  .filter(play => play.result && play.inning === inning && play.bases >= 1 && play.bases <= 3 && !play.out_on_base)
+  .filter(play => play.result && play.inning === inning && onBase(play))
   .length
 
 // Corredor que se quedó en base al terminar su entrada
-const isStranded = play => play.bases >= 1 && play.bases <= 3 && !play.out_on_base
+const isStranded = play => onBase(play)
   && inningState(SIDES.find(side => batting.value[side].some(line => line.plays.includes(play))), play.inning) === 'played'
-
-// LOB individual: al bateador que hace el tercer out se le cuentan los corredores que quedaron en base
-// en esa entrada (sin contarse a sí mismo si se embasó, como en una bola ocupada)
-const lobByPlay = computed(() => {
-  const result = new Map()
-  for (const side of SIDES) {
-    for (const turn of turnSequence(side).turns.filter(item => item.endsInning)) {
-      const stranded = batting.value[side].flatMap(line => line.plays)
-        .filter(play => play !== turn.play && play.result && play.inning === turn.inning && play.bases >= 1 && play.bases <= 3 && !play.out_on_base)
-      if (stranded.length) result.set(turn.play, stranded.length)
-    }
-  }
-  return result
-})
 
 // Bateador que se quedó en turno al cerrar cada entrada (abre la siguiente): línea => entradas cerradas
 const nextUpCells = computed(() => {
@@ -1512,7 +2019,14 @@ const isUnusedCell = (side, line, inning) => closedInningsBySide.value[side].has
   && cellPlays(line, inning).length === 0
   && !nextUpCells.value.get(line)?.has(inning)
 
-const lineLob = line => line.plays.reduce((sum, play) => sum + (lobByPlay.value.get(play) || 0), 0)
+// LOB del jugador (como en The Perfect Boxscore): veces que él se quedó en base al terminar la entrada
+const lineLob = line => line.plays.filter(play => play.result && isStranded(play)).length
+
+// En la entrada, el jugador no estaba en el juego en ese turno (aún no entraba de cambio, o ya lo cambiaron)
+const isInactiveCell = (side, line, inning) => {
+  const slot = battingSlots(side).find(item => item.includes(line))
+  return !!slot && slot.length > 1 && batterFor(slot, inning) !== line && cellPlays(line, inning).length === 0
+}
 
 const teamLob = (side) => {
   let lob = 0
@@ -1548,7 +2062,9 @@ const batterFor = (slot, inning) => slot.reduce((batter, line) => (
 const turnSequence = (side) => {
   const slots = battingSlots(side)
   const turns = []
-  if (slots.length === 0) return { turns, next: null }
+  // Corredores puestos out en un doble play: turno del corredor => { out: número de out (1-3), line: bateador del DP }
+  const dpOuts = new Map()
+  if (slots.length === 0) return { turns, next: null, dpOuts }
 
   const used = new Set()
   const countedRunnerOuts = new Set()
@@ -1556,8 +2072,6 @@ const turnSequence = (side) => {
   let slot = 0
   let inning = 1
   let outs = 0
-  // Corredores de la entrada puestos out sin indicar en qué turno (se contaron en su propio turno)
-  let unlinkedOuts = []
 
   for (let guard = 0; guard < 1000; guard++) {
     const line = batterFor(slots[slot], inning)
@@ -1566,29 +2080,26 @@ const turnSequence = (side) => {
     if (play) {
       used.add(play)
       turns.push({ line, inning, slot, play, outsBefore: outs })
-      // El corredor puesto out en las bases también cuenta para cerrar la entrada
-      const runnerOuts = runnerOutsIn(side, line, inning, play, used, countedRunnerOuts)
-      if (play.out_on_base && !play.out_during) unlinkedOuts.push(play)
 
-      // En DP y FC uno de los outs de la jugada es de un corredor. Si ese corredor se marcó out en este
-      // turno ya está incluido; si se marcó out sin indicar el turno, se toma como el de esta jugada
-      // y deja de contarse aparte
-      let inPlay = RUNNER_OUTS_IN_PLAY[play.result] || 0
-      const included = Math.min(runnerOuts, inPlay)
-      inPlay -= included
-      while (inPlay > 0 && unlinkedOuts.length) {
-        unlinkedOuts.pop()
-        outs--
-        inPlay--
+      // Reglas de The Perfect Boxscore: en un DP, si se indicó qué corredor fue el otro out y seguía en base,
+      // su out se cuenta antes que el del bateador
+      if (play.result === 'DP' && play.dp_runner) {
+        const runner = turns.slice(0, -1).reverse().find(turn => turn.inning === inning && turn.line === play.dp_runner)
+        if (runner && runner.play.bases >= 1 && runner.play.bases <= 3 && !runner.play.out_on_base && !dpOuts.has(runner.play)) {
+          outs++
+          dpOuts.set(runner.play, { out: Math.min(outs, 3), line })
+        }
       }
-      outs += (OUTS[play.result] || 0) + runnerOuts - included
+
+      // Outs de la jugada del bateador + corredores puestos out en las bases (el propio bateador si lo pusieron
+      // out después sin indicar en qué turno, o los que indican que fue en este turno)
+      outs += (OUTS[play.result] || 0) + runnerOutsIn(side, line, inning, play, used, countedRunnerOuts)
 
       slot = (slot + 1) % slots.length
       if (outs >= 3) {
         turns[turns.length - 1].endsInning = true
         inning++
         outs = 0
-        unlinkedOuts = []
       }
       continue
     }
@@ -1598,7 +2109,6 @@ const turnSequence = (side) => {
     if (closedInnings.value[side].includes(inning) || later.length) {
       inning = later.length && !closedInnings.value[side].includes(inning) ? Math.min(...later.map(item => item.inning)) : inning + 1
       outs = 0
-      unlinkedOuts = []
       // Si quien toca no tiene turno en esa entrada, sigue quien tenga el primero capturado
       if (!batterFor(slots[slot], inning).plays.some(item => item.result && item.inning === inning && !used.has(item))) {
         const found = slots.findIndex(candidate => batterFor(candidate, inning).plays.some(item => item.result && item.inning === inning && !used.has(item)))
@@ -1607,10 +2117,10 @@ const turnSequence = (side) => {
       continue
     }
 
-    return { turns, next: { line, inning, slot, play: null, outsBefore: outs } }
+    return { turns, next: { line, inning, slot, play: null, outsBefore: outs }, dpOuts }
   }
 
-  return { turns, next: null }
+  return { turns, next: null, dpOuts }
 }
 
 const sequence = computed(() => turnSequence(battingSide.value))
@@ -1634,7 +2144,7 @@ const runnerCandidates = computed(() => {
   if (turnIndex.value === null || !panelTurn.value) return []
   const { line, inning } = panelTurn.value
   return sequence.value.turns.slice(0, turnIndex.value)
-    .filter(turn => turn.inning === inning && turn.play.bases >= 1 && turn.play.bases <= 3)
+    .filter(turn => turn.inning === inning && turn.play.bases >= 1 && turn.play.bases <= 3 && !dpOutOf(turn.play))
     .filter(turn => !turn.play.out_on_base || !turn.play.out_during || turn.play.out_during === line)
 })
 
@@ -1648,9 +2158,6 @@ const toggleRunnerOut = (runnerPlay) => {
   }
   setOutOnBase(runnerPlay, true)
   runnerPlay.out_during = panelTurn.value.line
-  if (!runnerPlay.out_notation && panelPlay.value.result === 'DP' && panelPlay.value.notation) {
-    runnerPlay.out_notation = panelPlay.value.notation.split('-').slice(0, 2).join('-')
-  }
 }
 
 // Bateadores que batearon (o batean ahora) después del turno del panel en la misma entrada
@@ -1665,7 +2172,10 @@ const outDuringOptions = computed(() => {
 
 // Turno que se ve en el panel: uno ya capturado (turnIndex) o el siguiente por capturar (null)
 const draftPlay = ref(null)
-const newPlay = () => ({ inning: null, result: null, notation: '', rbi: 0, bases: 0, scored: false, out_on_base: false, out_notation: '', out_during: null })
+const newPlay = () => ({
+  inning: null, result: null, notation: '', rbi: 0, bases: 0, scored: false, out_on_base: false, out_notation: '', out_type: null, out_during: null,
+  stolen_bases: [], dp_runner: null, dp_notation: ''
+})
 
 const panelTurn = computed(() => turnIndex.value === null ? sequence.value.next : sequence.value.turns[turnIndex.value])
 const panelPlay = computed(() => panelTurn.value?.play || draftPlay.value)
@@ -1686,8 +2196,199 @@ const goNext = () => {
   turnIndex.value = turnIndex.value + 1 < sequence.value.turns.length ? turnIndex.value + 1 : null
 }
 
+// ---------- BARRA DEL SCORECARD (como en The Perfect Boxscore) ----------
+// Renglón seleccionado: sobre él actúan subir, bajar, sustituto y quitar. Abrir un turno selecciona a su bateador
+const selectedLine = ref(null)
+watch(() => panelTurn.value?.line, (line) => {
+  if (line) selectedLine.value = line
+})
+watch(battingSide, () => {
+  selectedLine.value = null
+})
+
+const selectedPosition = () => {
+  const line = selectedLine.value
+  if (!line) return null
+  const slots = battingSlots(battingSide.value)
+  const slotIdx = slots.findIndex(slot => slot.includes(line))
+  return slotIdx === -1 ? null : { slots, slotIdx, subIdx: slots[slotIdx].indexOf(line) }
+}
+
+// Subir / bajar: el titular se mueve con sus cambios entre los turnos del orden al bat; un cambio, dentro de su turno
+const canMoveSelected = (delta) => {
+  const pos = selectedPosition()
+  if (!pos) return false
+  if (pos.subIdx === 0) return pos.slotIdx + delta >= 0 && pos.slotIdx + delta < pos.slots.length
+  return pos.subIdx + delta >= 1 && pos.subIdx + delta < pos.slots[pos.slotIdx].length
+}
+
+const moveSelected = (delta) => {
+  if (!canMoveSelected(delta)) return
+  const { slots, slotIdx, subIdx } = selectedPosition()
+  const seq = subIdx === 0 ? slots : slots[slotIdx]
+  const i = subIdx === 0 ? slotIdx : subIdx
+  ;[seq[i], seq[i + delta]] = [seq[i + delta], seq[i]]
+  batting.value[battingSide.value].splice(0, Infinity, ...slots.flat())
+}
+
+// Sustituto (entra / sale): se agrega en el mismo turno, justo debajo del registro seleccionado
+const addSubToSelected = () => {
+  const line = selectedLine.value
+  if (!line) return
+  const lines = batting.value[battingSide.value]
+  const sub = newLine({ is_substitute: true, placeholder: `Cambio ${lines.filter(item => item.is_substitute).length + 1}` })
+  lines.splice(lines.indexOf(line) + 1, 0, sub)
+  selectedLine.value = sub
+}
+
+// Marcar como cambio / titular (EJPMX): para acomodar un bateador agregado de más; el primero siempre es titular
+const canToggleSubstitute = computed(() => !!selectedLine.value && batting.value[battingSide.value].indexOf(selectedLine.value) > 0)
+const toggleSubstitute = () => {
+  if (canToggleSubstitute.value) selectedLine.value.is_substitute = !selectedLine.value.is_substitute
+}
+
+// Quitar: como en The Perfect Boxscore los titulares no se quitan (se cambia al jugador en su renglón); solo los cambios
+// y, si el equipo tiene más de 9 titulares, el titular sobrante que no tenga cambios
+const canRemoveSelected = computed(() => {
+  const pos = selectedPosition()
+  if (!pos) return false
+  if (pos.subIdx > 0) return true
+  return pos.slots.length > LINEUP_SIZE && pos.slots[pos.slotIdx].length === 1
+})
+const removeTitle = computed(() => (selectedPosition()?.subIdx === 0 && !canRemoveSelected.value)
+  ? 'Los titulares no se quitan: cambia al jugador en su renglón o agrega un sustituto'
+  : 'Quitar el registro seleccionado')
+const removeSelected = () => {
+  if (!canRemoveSelected.value) return
+  const { slots, slotIdx, subIdx } = selectedPosition()
+  const lines = batting.value[battingSide.value]
+  const line = selectedLine.value
+  lines.splice(lines.indexOf(line), 1)
+  // Queda seleccionado el registro de arriba en el mismo turno (o el turno anterior)
+  selectedLine.value = subIdx > 0 ? slots[slotIdx][subIdx - 1] : (slots[slotIdx - 1]?.[0] || null)
+  if (panelTurn.value?.line === line) turnIndex.value = null
+}
+
+// Limpiar: deja vacía la jugada del turno que se ve en el panel (se puede deshacer); el turno queda por capturar
+const canClear = computed(() => turnIndex.value !== null && !!panelTurn.value?.play)
+const clearPlay = () => {
+  if (!canClear.value) return
+  const { line, play } = panelTurn.value
+  line.plays.splice(line.plays.indexOf(play), 1)
+  turnIndex.value = null
+}
+
+// Vista compacta: solo la columna de la entrada en juego (sin Pos ni Game Stats), con ◀ ▶ para ver las ya jugadas
+const slim = ref(false)
+const viewInning = ref(1)
+const slimActive = computed(() => slim.value && mode.value === 'scorecard')
+const lastInning = computed(() => {
+  const played = batting.value[battingSide.value].flatMap(line => line.plays).filter(play => play.result).map(play => play.inning)
+  return Math.min(Math.max(panelTurn.value?.inning || 1, ...played), innings.value)
+})
+const visibleInnings = computed(() => slimActive.value
+  ? [Math.min(Math.max(viewInning.value, 1), innings.value)]
+  : Array.from({ length: innings.value }, (_, index) => index + 1))
+const toggleSlim = () => {
+  slim.value = !slim.value
+  viewInning.value = Math.min(panelTurn.value?.inning || lastInning.value, innings.value)
+}
+// La vista compacta sigue a la entrada en juego
+watch(() => panelTurn.value?.inning, (inning) => {
+  if (inning && inning <= innings.value) viewInning.value = inning
+})
+
+// Deshacer / rehacer: fotos de las jugadas de ambos equipos antes de cada cambio, con el turno en que se hizo.
+// Los cambios seguidos en el mismo turno (p. ej. al escribir una anotación) se juntan en un solo paso
+const UNDO_LIMIT = 200
+const MERGE_MS = 800
+const undoStack = ref([])
+const redoStack = ref([])
+let playsSnapshot = ''
+let lastChange = { at: 0, cell: null }
+
+const currentCell = () => panelTurn.value?.play ? { uid: panelTurn.value.line.uid, inning: panelTurn.value.inning } : null
+// Solo las jugadas (como en The Perfect Boxscore): mover o agregar renglones no es un paso de deshacer
+const serializePlays = () => JSON.stringify(SIDES.map(side => batting.value[side]
+  .filter(line => line.plays.some(play => play.result))
+  .map(line => [
+    line.uid,
+    line.plays.filter(play => play.result).map(play => ({ ...play, out_during: play.out_during?.uid ?? null, dp_runner: play.dp_runner?.uid ?? null }))
+  ])
+  .sort((a, b) => a[0] - b[0])))
+
+const restorePlays = (snapshot, cell) => {
+  const saved = JSON.parse(snapshot)
+  SIDES.forEach((side, index) => {
+    const byUid = new Map(batting.value[side].map(line => [line.uid, line]))
+    const plays = new Map(saved[index])
+    for (const line of batting.value[side]) {
+      line.plays = (plays.get(line.uid) || []).map(play => ({
+        ...play,
+        out_during: byUid.get(play.out_during) || null,
+        dp_runner: byUid.get(play.dp_runner) || null
+      }))
+    }
+  })
+  playsSnapshot = serializePlays()
+  lastChange = { at: 0, cell: null }
+  // Regresa al turno donde se hizo el cambio
+  const index = cell ? sequence.value.turns.findIndex(turn => turn.line.uid === cell.uid && turn.inning === cell.inning) : -1
+  turnIndex.value = index === -1 ? null : index
+}
+
+watch(serializePlays, (snapshot) => {
+  if (snapshot === playsSnapshot) return
+  const cell = currentCell()
+  const now = Date.now()
+  const merge = now - lastChange.at < MERGE_MS && JSON.stringify(cell) === JSON.stringify(lastChange.cell) && undoStack.value.length
+  if (!merge) {
+    undoStack.value.push({ snapshot: playsSnapshot, cell })
+    if (undoStack.value.length > UNDO_LIMIT) undoStack.value.shift()
+  }
+  redoStack.value = []
+  playsSnapshot = snapshot
+  lastChange = { at: now, cell }
+})
+
+const undo = () => {
+  const step = undoStack.value.pop()
+  if (!step) return
+  redoStack.value.push({ snapshot: playsSnapshot, cell: step.cell })
+  restorePlays(step.snapshot, step.cell)
+}
+
+const redo = () => {
+  const step = redoStack.value.pop()
+  if (!step) return
+  undoStack.value.push({ snapshot: playsSnapshot, cell: step.cell })
+  restorePlays(step.snapshot, step.cell)
+}
+
+// Al cargar otro partido se empieza sin historial
+const resetHistory = () => {
+  undoStack.value = []
+  redoStack.value = []
+  playsSnapshot = serializePlays()
+  lastChange = { at: 0, cell: null }
+}
+
 // Las impulsadas se marcan y desmarcan con el mismo chip (sin selección son 0);
 // con home run no se pueden quitar porque se impulsa al menos a sí mismo
+// RBI 0-4 como en The Perfect Boxscore (con home run al menos 1)
+const setRbi = (play, rbi) => {
+  play.rbi = play.result === 'HR' ? Math.max(rbi, 1) : rbi
+}
+
+// Botones de posición / trayectoria de TPB; se ven deshabilitados hasta elegir la jugada
+const NOTATION_BUTTONS = ['1', '2', '3', '4', '5', '6', '7', '78', '8', '89', '9']
+
+// La columna de captura tiene un turno que mostrar (mismas condiciones que el encabezado del turno)
+const showPlayColumn = computed(() => batting.value[battingSide.value].length > 0
+  && substitutesWithoutEntry.value.length === 0
+  && !!panelTurn.value
+  && panelTurn.value.inning <= innings.value)
+
 const toggleRbi = (play, rbi) => {
   if (toInt(play.rbi) !== rbi) play.rbi = rbi
   else if (play.result !== 'HR') play.rbi = 0
@@ -1696,10 +2397,15 @@ const toggleRbi = (play, rbi) => {
 // Al elegir la jugada del turno por capturar, el turno queda registrado en la casilla del bateador
 const chooseResult = (result) => {
   const play = panelPlay.value
-  // Al cambiar la jugada se limpia la anotación y el bateador queda en la base a la que llegó con ella
+  // Al cambiar la jugada (como set_result de The Perfect Boxscore) se limpia la anotación, el bateador queda en
+  // la base a la que llega con ella, se quitan el out en base, el revire, el pisa y corre y el corredor del DP;
+  // si el bateador fue out no corrió las bases (sin robos)
   if (play.result !== result) {
     play.notation = ''
     setBases(play, START_BASE[result] || 0)
+    setOutOnBase(play, false)
+    play.dp_runner = null
+    if (result in OUTS) play.stolen_bases = []
   }
   play.result = result
   // Con home run se impulsa al menos a sí mismo
@@ -1711,7 +2417,83 @@ const chooseResult = (result) => {
     line.plays.push(play)
     turnIndex.value = sequence.value.turns.findIndex(turn => turn.play === play)
   }
+
+  // DP con un solo corredor en base: él fue el otro out
+  if (result === 'DP' && !play.dp_runner) {
+    const candidates = dpCandidates(turnIndex.value)
+    if (candidates.length === 1) play.dp_runner = candidates[0].line
+  }
 }
+
+// DP: corredor que fue el otro out (con el mismo se desmarca)
+const setDpRunner = (line) => {
+  panelPlay.value.dp_runner = panelPlay.value.dp_runner === line ? null : line
+}
+
+// Candidatos del DP del turno del panel, con la base en que estaban: "1ra · Nombre"
+const panelDpCandidates = computed(() => turnIndex.value === null || panelPlay.value?.result !== 'DP' ? [] : dpCandidates(turnIndex.value))
+const panelDpAvailable = computed(() => turnIndex.value !== null && dpBatterFor(turnIndex.value) !== -1)
+
+// Estadísticas del bateador del turno (la "fila del turno" de The Perfect Boxscore)
+const panelLineStats = computed(() => panelTurn.value ? SCORECARD_COLUMNS.map(column => ({ ...column, value: statValue(panelTurn.value.line, column.key) })) : [])
+
+// ---------- CUENTA (bolas y strikes) ----------
+// 4 bolas = base por bolas, 3 strikes = ponche; se aplican tras una espera para poder corregir la cuenta
+const MAX_BALLS = 4
+const MAX_STRIKES = 3
+const COUNT_SECONDS = 5
+const count = ref({ balls: 0, strikes: 0 })
+const countPending = ref(null)
+const countRemaining = ref(0)
+let countTimer = null
+
+const stopCount = () => {
+  clearInterval(countTimer)
+  countTimer = null
+  countPending.value = null
+}
+
+const resetCount = () => {
+  stopCount()
+  count.value = { balls: 0, strikes: 0 }
+}
+
+// Al presionar el círculo N la cuenta queda en N; si ya era el último encendido, se apaga (para corregir)
+const setCount = (kind, value) => {
+  count.value[kind] = count.value[kind] === value ? value - 1 : value
+  const result = count.value.balls >= MAX_BALLS ? 'BB' : count.value.strikes >= MAX_STRIKES ? 'KS' : null
+  if (result === countPending.value) return
+  stopCount()
+  if (!result) return
+  countPending.value = result
+  countRemaining.value = COUNT_SECONDS
+  countTimer = setInterval(() => {
+    countRemaining.value--
+    if (countRemaining.value > 0) return
+    const pendingResult = countPending.value
+    resetCount()
+    applyCount(pendingResult)
+  }, 1000)
+}
+
+// Se completó la cuenta del turno por capturar: BB (con los corredores forzados) o ponche, y pasa al siguiente
+const applyCount = (result) => {
+  if (turnIndex.value !== null || !sequence.value.next || panelPlay.value.result) return
+  const turnsBefore = sequence.value.turns
+  const { inning } = sequence.value.next
+  const play = panelPlay.value
+  chooseResult(result)
+  if (result === 'BB') applyWalk(play, inning, turnsBefore)
+  turnIndex.value = null
+}
+
+const countStatus = computed(() => countPending.value
+  ? `${countPending.value === 'BB' ? 'Base por bolas' : 'Ponche'} en ${countRemaining.value} s`
+  : '')
+
+// Otro turno: la cuenta empieza en 0-0
+watch([() => panelTurn.value?.line, () => panelTurn.value?.inning, turnIndex, battingSide], resetCount)
+onBeforeUnmount(stopCount)
 
 const closeInning = () => {
   const next = sequence.value.next
@@ -1733,6 +2515,24 @@ const openTurn = (line, inning) => {
 }
 
 const notationOptions = play => NOTATIONS[play.result] || []
+
+// ---------- GAME STATS ----------
+const gameStatsDialog = ref(false)
+const gameStatsLine = ref(null)
+const openGameStats = (line) => {
+  gameStatsLine.value = line
+  gameStatsDialog.value = true
+}
+const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0].toUpperCase()).join('')
+// Posición · Turno N · equipo
+const gameStatsInfo = computed(() => {
+  const line = gameStatsLine.value
+  if (!line) return ''
+  const side = SIDES.find(item => batting.value[item].includes(line))
+  if (!side) return ''
+  const slot = battingSlots(side).findIndex(item => item.includes(line))
+  return [line.position, `Turno ${slot + 1}`, teamOf(side).name].filter(Boolean).join('  ·  ')
+})
 
 const enteredInningOptions = computed(() => Array.from({ length: innings.value }, (_, index) => index + 1))
 
@@ -1761,7 +2561,7 @@ const battingWarnings = computed(() => {
 })
 
 // ---------- GUARDAR ----------
-const handleSubmit = () => {
+const buildPayload = () => {
   const payload = { mode: mode.value }
   for (const side of SIDES) {
     payload[`${side}_score`] = mode.value === 'linescore'
@@ -1784,12 +2584,11 @@ const handleSubmit = () => {
 
   if (isBatting.value) {
     // Se envían todas las columnas para no perder lo capturado en la otra modalidad de bateo
-    payload.batting = SIDES.flatMap(side => batting.value[side]
-      .filter(line => line.player_id || line.placeholder)
+    payload.batting = SIDES.flatMap(side => linesToSave(side)
       .map((line, _, sent) => ({
         team_id: teamIdOf(side),
         player_id: line.player_id,
-        placeholder: line.player_id ? null : line.placeholder,
+        placeholder: savedPlaceholder(side, line),
         position: line.position,
         is_substitute: line.is_substitute,
         entered_inning: line.is_substitute ? line.entered_inning : null,
@@ -1802,15 +2601,65 @@ const handleSubmit = () => {
           scored: play.bases === 4,
           out_on_base: play.out_on_base,
           out_notation: play.out_on_base ? play.out_notation || null : null,
-          out_during_order: play.out_on_base && sent.includes(play.out_during) ? sent.indexOf(play.out_during) + 1 : null
+          out_during_order: play.out_on_base && sent.includes(play.out_during) ? sent.indexOf(play.out_during) + 1 : null,
+          out_type: play.out_on_base ? play.out_type : null,
+          stolen_bases: play.stolen_bases || [],
+          dp_runner_order: play.result === 'DP' && sent.includes(play.dp_runner) ? sent.indexOf(play.dp_runner) + 1 : null,
+          dp_notation: dpOutOf(play) ? play.dp_notation || null : null
         })),
         ...Object.fromEntries(STATS.map(key => [key, toInt(line[key])])),
         ...(mode.value === 'scorecard' ? { lob: lineLob(line) } : {})
       })))
   }
 
-  emit('save', payload)
+  return payload
 }
+
+// ---------- AUTOGUARDADO ----------
+// Lo que se guardaría ahora. Cada vez que cambia (elegir jugador o posición, registrar una jugada, la barra del
+// scorecard, +/− Entrada, la modalidad...) se avisa a la página con "change". Los campos de texto y número (notación,
+// E, LOB, line score, estadísticas) avisan hasta que pierden el foco, no en cada tecla
+const payloadJson = computed(() => (ready.value ? JSON.stringify(buildPayload()) : null))
+let lastEmitted = null
+const DEFERRED_FIELDS = 'input.notation-input, input.stat-input'
+const isTypingInField = () => !!document.activeElement?.matches?.(DEFERRED_FIELDS)
+
+const emitChange = () => {
+  const json = payloadJson.value
+  if (json === null || json === lastEmitted) return
+  // Lo primero que se calcula al cargar el partido es el punto de partida: no se vuelve a guardar
+  if (lastEmitted === null) {
+    lastEmitted = json
+    return
+  }
+  if (isTypingInField()) return
+  lastEmitted = json
+  emit('change', JSON.parse(json))
+}
+
+watch(payloadJson, emitChange)
+
+// Al salir de un campo de texto o número se avisa lo que se escribió (el foco ya está en otro elemento)
+const onFocusOut = (event) => {
+  if (event.target?.matches?.(DEFERRED_FIELDS)) setTimeout(emitChange, 0)
+}
+
+// Al cargar otro partido se vuelve a tomar el punto de partida
+watch(ready, (value) => {
+  if (!value) lastEmitted = null
+})
+
+// Hay algo escrito que todavía no se avisó (el campo sigue con el foco)
+const isDirty = () => payloadJson.value !== null && lastEmitted !== null && payloadJson.value !== lastEmitted
+// Avisa ya lo pendiente (antes de salir de la página)
+const flushChange = () => {
+  const json = payloadJson.value
+  if (json === null || json === lastEmitted) return
+  lastEmitted = json
+  emit('change', JSON.parse(json))
+}
+
+defineExpose({ isDirty, flushChange })
 </script>
 
 <style scoped>
@@ -1968,41 +2817,137 @@ const handleSubmit = () => {
   vertical-align: -2px;
 }
 
+/* Diamante con los colores de impresión de The Perfect Boxscore (fondo claro) */
 .sc-diamond__field {
   fill: none;
-  stroke: #cbd5e1;
-  stroke-width: 1.5;
+  stroke: #8a939e;
+  stroke-width: 1.2;
 }
 
 .sc-diamond__path {
+  stroke: #1f5fbf;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.sc-diamond__path--stolen {
+  stroke: #7b3fb8 !important;
+}
+
+.sc-diamond__runner {
+  fill: #1f5fbf;
+}
+
+.sc-diamond__runner--stranded {
+  fill: #d98200;
+}
+
+.sc-diamond__out {
+  stroke: #c62828;
+  stroke-width: 2.2;
+  stroke-linecap: round;
   fill: none;
-  stroke: #1565c0;
-  stroke-width: 2.5;
-  stroke-linejoin: round;
 }
 
 .sc-diamond--scored .sc-diamond__field {
-  fill: #2e7d32;
-  stroke: #2e7d32;
+  fill: rgba(46, 139, 87, 0.27);
 }
 
 .sc-diamond--scored .sc-diamond__path {
-  stroke: #2e7d32;
+  stroke: #1e7d46;
 }
 
-.sc-diamond--out .sc-diamond__path {
-  stroke: #c62828;
+/* Casilla: diamante a la izquierda; jugada y, debajo en letra chica, robos / DP / PK / PC / LOB */
+.sc-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sc-play__text {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sc-play__extra {
+  display: inline-flex;
+  gap: 3px;
+  font-size: 0.625rem;
+  line-height: 1.1;
+}
+
+.sc-steal {
+  color: #7b3fb8;
 }
 
 .sc-stranded {
-  color: #64748b;
+  color: #d98200;
   font-size: 0.625rem;
   letter-spacing: 0.04em;
 }
 
-.sc-lob {
-  color: #b45309;
-  font-size: 0.625rem;
+/* Colores por resultado (hit, anotó, en base, out en base), como en The Perfect Boxscore */
+.sc-cell.sc-cell--style-hit {
+  background: #e8f1ff;
+}
+
+.sc-cell.sc-cell--style-scored {
+  background: #e7f6ec;
+}
+
+.sc-cell.sc-cell--style-on-base {
+  background: #f1f5fb;
+}
+
+.sc-cell.sc-cell--style-out-on-base {
+  background: #fdecec;
+}
+
+.sc-play--scored {
+  color: #1e7d46;
+}
+
+.sc-play--out-on-base {
+  color: #c62828;
+}
+
+.count-dot {
+  cursor: pointer;
+}
+
+/* Barra del scorecard: botones de solo icono alineados a la izquierda, como en The Perfect Boxscore */
+.sc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.sc-toolbar__gap {
+  width: 10px;
+}
+
+.box-table .lineup-row--selected > td {
+  background-color: #e8f0fe;
+}
+
+.box-table .lineup-row--selected > td:first-child {
+  box-shadow: inset 3px 0 0 #1976d2;
+}
+
+.play-panel__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+.game-stats-table th,
+.game-stats-table td {
+  text-align: center;
+  min-width: 40px;
 }
 
 /* Casilla que no se usó en una entrada ya cerrada */
@@ -2100,6 +3045,70 @@ const handleSubmit = () => {
   gap: 8px 12px;
   align-items: center;
   padding: 10px 12px;
+}
+
+/* Escritorio: tabla a la izquierda (con su scroll horizontal) y botones de la jugada en una columna angosta a la
+   derecha, como en The Perfect Boxscore. En pantallas más chicas la columna queda arriba de la tabla, como antes */
+.sc-layout--scorecard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sc-layout--scorecard .sc-layout__side {
+  order: -1;
+}
+
+@media (min-width: 1280px) {
+  .sc-layout--scorecard {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .sc-layout--scorecard .sc-layout__main {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .sc-layout--scorecard .sc-layout__side {
+    order: 0;
+    flex: 0 0 316px;
+    width: 316px;
+    position: sticky;
+    top: 72px;
+  }
+
+  /* En columna: el título de cada sección arriba y sus botones debajo (5 a 6 por renglón) */
+  .sc-layout__side .play-panel__play {
+    display: block;
+  }
+
+  .sc-layout__side .play-panel__label {
+    margin: 10px 0 4px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid #dbeafe;
+  }
+
+  .sc-layout__side .play-panel__label:first-child {
+    margin-top: 0;
+  }
+
+  .sc-layout__side .play-panel__group {
+    margin-right: 0;
+    margin-bottom: 4px;
+    width: 100%;
+  }
+
+  .sc-layout__side .play-panel__group > .text-caption:first-child {
+    width: 100%;
+  }
+
+  /* Corrido: "Robó" en su propio renglón, como en TPB */
+  .sc-layout__side .steal-caption {
+    width: 100%;
+    margin-left: 0 !important;
+    margin-top: 2px;
+  }
 }
 
 .play-panel__play + .play-panel__play {
@@ -2210,6 +3219,36 @@ const handleSubmit = () => {
   padding-top: 2px;
   padding-bottom: 2px;
   font-size: 0.75rem;
+}
+
+/* Combo Pos: poco relleno y flecha compacta para que la abreviatura (SS, CF, 1B) quepa en la columna */
+.position-field :deep(.v-field) {
+  padding-inline-end: 2px;
+}
+
+.position-field :deep(.v-field__input) {
+  padding-inline: 8px 0;
+  flex-wrap: nowrap;
+}
+
+.position-field :deep(.v-select__selection) {
+  margin: 0;
+  max-width: none;
+}
+
+.position-field :deep(.v-select__selection-text) {
+  overflow: visible;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.position-field :deep(.v-field__append-inner) {
+  padding-inline-start: 0;
+}
+
+.position-field :deep(.v-field__append-inner .v-icon) {
+  margin-inline-start: 0;
+  font-size: 18px;
 }
 
 /* Lineup, pestañas de equipo y panel de captura más compactos */

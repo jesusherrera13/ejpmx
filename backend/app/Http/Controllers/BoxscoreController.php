@@ -20,7 +20,9 @@ use Illuminate\Validation\ValidationException;
  *  - batting_full: bateo detallado (PA AB H 1B 2B 3B HR R RBI BB IBB HBP SF SH SO KS KC E);
  *    R y H del equipo son la suma de su lineup
  *  - scorecard: la jugada de cada turno en su entrada; de ahí se calculan el bateo de cada
- *    jugador (salvo E), las carreras por entrada y R y H del equipo
+ *    jugador (salvo E), las carreras por entrada y R y H del equipo, con las reglas de The Perfect
+ *    Boxscore (DP = out del bateador + el del corredor indicado, FC sin out del bateador, PK, pisa y
+ *    corre, bases robadas y LOB del jugador = veces que se quedó en base)
  * Cada modalidad guarda solo su sección; lo capturado en las demás se conserva.
  * Los turnos del scorecard viajan con el lineup, así que se conservan al guardar en Bateo.
  */
@@ -94,6 +96,11 @@ class BoxscoreController extends Controller
                 'batting.*.plate_appearances.*.out_on_base' => 'boolean',
                 'batting.*.plate_appearances.*.out_notation' => 'nullable|string|max:20',
                 'batting.*.plate_appearances.*.out_during_order' => 'nullable|integer|min:1|max:99',
+                'batting.*.plate_appearances.*.out_type' => ['nullable', Rule::in(GamePlateAppearance::OUT_TYPES)],
+                'batting.*.plate_appearances.*.stolen_bases' => 'nullable|array|max:3',
+                'batting.*.plate_appearances.*.stolen_bases.*' => ['integer', 'distinct', Rule::in(GamePlateAppearance::STEALABLE)],
+                'batting.*.plate_appearances.*.dp_runner_order' => 'nullable|integer|min:1|max:99',
+                'batting.*.plate_appearances.*.dp_notation' => 'nullable|string|max:20',
             ];
             foreach (GameBattingLine::STATS as $column) {
                 $rules["batting.*.{$column}"] = 'nullable|integer|min:0|max:99';
@@ -168,11 +175,16 @@ class BoxscoreController extends Controller
                 }
 
                 // Base a la que llegó (4 = home); con home run siempre llega y si fue out no se embasó
+                $reaches = in_array($appearance['result'], GamePlateAppearance::REACHES, true);
+                // Robos: solo si se embasó (si fue out no corrió las bases); el robo lo deja al menos en esa base
+                $steals = $reaches ? array_values(array_intersect(GamePlateAppearance::STEALABLE, $appearance['stolen_bases'] ?? [])) : [];
                 $bases = match (true) {
                     $appearance['result'] === 'HR' => 4,
-                    ! in_array($appearance['result'], GamePlateAppearance::REACHES, true) => 0,
-                    default => (int) ($appearance['bases'] ?? (empty($appearance['scored']) ? 0 : 4)),
+                    ! $reaches => 0,
+                    default => max((int) ($appearance['bases'] ?? (empty($appearance['scored']) ? 0 : 4)), $steals ? max($steals) : 0),
                 };
+                // Out del corredor en un doble play: deja de estar en base (no anota ni queda LOB)
+                $dpNotation = $bases > 0 && $bases < 4 ? ($appearance['dp_notation'] ?? null) : null;
 
                 $appearances[] = [
                     'inning' => $appearance['inning'],
@@ -186,6 +198,11 @@ class BoxscoreController extends Controller
                     'out_on_base' => $outOnBase = $bases > 0 && $bases < 4 && ! empty($appearance['out_on_base']),
                     'out_notation' => $outOnBase ? ($appearance['out_notation'] ?? null) : null,
                     'out_during_order' => $outOnBase ? ($appearance['out_during_order'] ?? null) : null,
+                    'out_type' => $outOnBase ? ($appearance['out_type'] ?? null) : null,
+                    'stolen_bases' => $steals ? implode(',', $steals) : null,
+                    // Solo el DP del bateador indica qué corredor fue el otro out
+                    'dp_runner_order' => $appearance['result'] === 'DP' ? ($appearance['dp_runner_order'] ?? null) : null,
+                    'dp_notation' => $outOnBase ? null : $dpNotation,
                 ];
             }
 
