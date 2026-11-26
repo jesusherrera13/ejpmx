@@ -1,131 +1,8 @@
 <template>
     
 
-    <!-- 2. NAVBAR PRINCIPAL (Se queda igual, Vuetify la apilará automáticamente debajo) -->
-    <v-app-bar flat color="brand-blue" class="text-white px-md-8" height="56" order="1">
-      <div class="d-flex align-center mr-6">
-        <span class="font-weight-black text-h6 tracking-wider">EL JUEGO PERFECTO</span>
-        <span class="text-caption font-weight-medium ml-1 text-white">MX</span>
-      </div>
-
-      <div class="d-none d-lg-flex ga-4 align-center">
-        <v-btn variant="text" class="text-capitalize font-weight-bold text-body-2" v-for="link in mainLinks" :key="link.title" :to="link.to">
-          {{ link.title }}
-        </v-btn>
-      </div>
-
-      <v-spacer />
-
-      <div class="d-flex align-center ga-3">
-        <div class="d-none d-md-flex ga-3 text-caption text-grey-lighten-2 mr-4">
-          <span class="cursor-pointer hover-white">TIENDA</span>
-          <span class="cursor-pointer hover-white">EQUIPOS</span>
-        </div>
-        
-        <v-btn icon="mdi-magnify" variant="text" size="small" />
-        
-        <!-- CONTROL DE AUTENTICACIÓN (DIARIO/MENÚ DE USUARIO) -->
-        <template v-if="!authStore.user.id">
-          <v-btn 
-            variant="outlined" 
-            size="small" 
-            class="text-capitalize rounded-pill px-4 text-white border-white" 
-            prepend-icon="mdi-account-circle"
-            to="/login"
-          >
-            Iniciar Sesión
-          </v-btn>
-        </template>
-
-        <template v-else>
-          <!-- Menú desplegable estilo cuenta de Google -->
-          <v-menu :close-on-content-click="false" location="bottom end" transition="scale-transition">
-            <template v-slot:activator="{ props }">
-              <v-avatar 
-                v-bind="props" 
-                color="secondary" 
-                class="cursor-pointer text-white font-weight-bold elevation-1" 
-                size="36"
-              >
-                {{ authStore.user.initial }}
-              </v-avatar>
-            </template>
-
-            <!-- Contenedor del Menú Flotante -->
-            <v-card width="340" class="mt-2 rounded-xl pa-4 menu-container" flat elevation="4">
-              <!-- Encabezado del perfil -->
-              <div class="text-center position-relative pt-2">
-                <div class="text-caption text-grey-darken-2 font-weight-medium mb-1">
-                  {{ authStore.user.email }}
-                </div>
-                
-                <!-- Avatar Central (Soporta Foto de Perfil o Inicial) -->
-                <div class="d-flex justify-center my-3">
-                  <v-avatar 
-                    color="secondary" 
-                    size="76" 
-                    class="text-white text-h4 font-weight-medium elevation-2"
-                    :image="authStore.user.avatarUrl || undefined"
-                  >
-                    <template v-if="!authStore.user.avatarUrl">
-                      {{ authStore.user.initial }}
-                    </template>
-                  </v-avatar>
-                </div>
-
-                <h2 class="text-h6 font-weight-regular text-grey-darken-4 mb-4">
-                  ¡Hola, {{ authStore.user.name }}!
-                </h2>
-              </div>
-
-              <v-divider class="my-2"></v-divider>
-
-              <!-- LISTA DE MENÚS Y OPCIONES INTERACTIVAS -->
-              <div class="d-flex flex-column ga-2 mt-2">
-                
-                <!-- MENÚ ADMINISTRADOR (Solo visible si isAdmin es true) -->
-                <v-btn
-                  block
-                  variant="flat"
-                  size="large"
-                  class="text-capitalize rounded-pill justify-start px-4 custom-menu-btn admin-btn"
-                  to="/admin/dashboard"
-                >
-                  <v-icon icon="mdi-shield-account" size="22" class="mr-3 text-primary" />
-                  <span class="text-body-1 font-weight-medium text-grey-darken-4">
-                    Panel de Administración
-                  </span>
-                </v-btn>
-
-                <!-- BOTÓN CERRAR SESIÓN -->
-                <v-btn
-                  block
-                  variant="flat"
-                  size="large"
-                  class="text-capitalize rounded-pill justify-start px-4 custom-menu-btn"
-                  @click="handleLogout"
-                >
-                  <v-icon icon="mdi-logout" size="22" class="mr-3 text-grey-darken-3" />
-                  <span class="text-body-1 font-weight-medium text-grey-darken-3">
-                    Cerrar sesión
-                  </span>
-                </v-btn>
-              </div>
-
-              <!-- Footer Legal Mínimo -->
-              <div class="d-flex justify-center ga-4 mt-4 pt-2 text-xxs text-grey-darken-1 border-top-light">
-                <a href="#" class="text-decoration-none text-grey-darken-1">Política de Privacidad</a>
-                <span>•</span>
-                <a href="#" class="text-decoration-none text-grey-darken-1">Términos del Servicio</a>
-              </div>
-            </v-card>
-          </v-menu>
-        </template>
-      </div>
-    </v-app-bar>
-
-    <!-- 1. MARCADOR SUPERIOR: partidos reales de los torneos públicos -->
-    <ScoresTicker />
+    <!-- Encabezado del portal (barra principal y marcador), el mismo en todas las páginas públicas -->
+    <SiteHeader />
 
     <!-- 3. CONTENIDO PRINCIPAL -->
     <v-main>
@@ -326,7 +203,7 @@
             <StatLeaders />
 
             <!-- BLOQUE: PUBLICIDAD DE PATROCINADORES (al azar entre la vigente) -->
-            <SponsoredAds />
+            <SponsoredAds placeholder />
 
             <!-- BLOQUE: JUEGO DE ESTRELLAS 2026 -->
             <v-card flat class="pa-5 rounded-lg bg-white">
@@ -365,19 +242,15 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useAuthStore } from '@/stores/auth';
 import { usePublicBlogsStore } from '@/stores/publicBlogs'
 import { videoThumbnail } from '@/utils/video'
 import SponsoredAds from '@/components/SponsoredAds.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
-import ScoresTicker from '@/components/ScoresTicker.vue'
+import SiteHeader from '@/components/SiteHeader.vue'
 import StandingsCard from '@/components/StandingsCard.vue'
 import StatLeaders from '@/components/StatLeaders.vue'
 import { usePublicGamesStore } from '@/stores/publicGames'
 
-const authStore = useAuthStore();
-
-console.log(authStore.user);
 
 /* const authStore = ref({
   isAuthenticated: true, // Cambia a false para ver el botón de login clásico
@@ -387,16 +260,6 @@ console.log(authStore.user);
     initial: 'J'
   }
 }) */
-
-// Enlaces navegación principal
-// (solo Resultados y Calendario tienen página por ahora)
-const mainLinks = [
-  { title: 'RESULTADOS', to: { name: 'Results' } },
-  { title: 'POSICIONES', to: { name: 'Standings' } },
-  { title: 'CALENDARIO', to: { name: 'Results' } },
-  { title: 'ESTADÍSTICAS' },
-  { title: 'JUGADORES' },
-]
 
 // Publicaciones del panel de administración (artículos y videos publicados)
 const blogsStore = usePublicBlogsStore()
@@ -441,21 +304,6 @@ const allStarNews = ref([
   { title: 'Los mejores momentos en la historia del Festival de Jonrones', icon: 'mdi-fire' }
 ])
 
-const handleLogout = async () => {
-  try {
-    // Aquí ejecutas tu llamada fetch/axios a tu endpoint de Django:
-    // await axios.post('/api/auth/logout/')
-    
-    // Limpiamos el estado local de la aplicación
-    //authStore.value.isAuthenticated = false
-    //authStore.value.user = null
-    await authStore.logout();
-    // Opcional: Redirigir al inicio o a la vista de login
-    if(authStore.user.user_id) router.push('/')
-  } catch (error) {
-    console.error('Error al cerrar sesión:', error)
-  }
-}
 </script>
 
 <style scoped>

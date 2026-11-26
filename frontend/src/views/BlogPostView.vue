@@ -1,69 +1,70 @@
 <template>
   <v-app class="bg-background">
-    <v-app-bar flat color="brand-blue" class="text-white px-md-8" height="56">
-      <router-link to="/" class="d-flex align-center text-white text-decoration-none mr-6">
-        <span class="font-weight-black text-h6 tracking-wider">EL JUEGO PERFECTO</span>
-        <span class="text-caption font-weight-medium ml-1">MX</span>
-      </router-link>
-      <v-spacer />
-      <v-btn to="/" variant="text" class="text-none font-weight-bold" prepend-icon="mdi-arrow-left">
-        Inicio
-      </v-btn>
-    </v-app-bar>
+    <!-- Encabezado del portal, el mismo de la página principal -->
+    <SiteHeader />
 
     <v-main>
-      <v-container class="py-8 px-4" style="max-width: 860px;">
-        <!-- Cargando -->
-        <v-card v-if="loading" flat class="rounded-lg bg-white">
-          <v-skeleton-loader type="image, heading, paragraph, paragraph" />
-        </v-card>
+      <v-container class="py-8 px-4 px-md-8" fluid style="max-width: 1440px;">
+        <v-row>
+          <v-col cols="12" lg="8">
+            <!-- Cargando -->
+            <v-card v-if="loading" flat class="rounded-lg bg-white">
+              <v-skeleton-loader type="image, heading, paragraph, paragraph" />
+            </v-card>
 
-        <!-- No existe o no está publicada -->
-        <v-card v-else-if="error" flat class="rounded-lg bg-white pa-10 text-center">
-          <v-icon icon="mdi-file-question-outline" size="48" color="primary" class="mb-3" />
-          <div class="text-h6 font-weight-bold mb-1">{{ error }}</div>
-          <v-btn to="/" color="primary" variant="flat" class="text-none rounded-pill mt-4">Volver al inicio</v-btn>
-        </v-card>
+            <!-- No existe o no está publicada -->
+            <v-card v-else-if="error" flat class="rounded-lg bg-white pa-10 text-center">
+              <v-icon icon="mdi-file-question-outline" size="48" color="primary" class="mb-3" />
+              <div class="text-h6 font-weight-bold mb-1">{{ error }}</div>
+              <v-btn to="/" color="primary" variant="flat" class="text-none rounded-pill mt-4">Volver al inicio</v-btn>
+            </v-card>
 
-        <!-- Publicación -->
-        <v-card v-else-if="post" flat class="rounded-lg overflow-hidden bg-white">
-          <!-- Video: reproductor arriba; artículo: portada -->
-          <div v-if="post.type === 'video' && videoEmbed" class="video-wrapper">
-            <iframe
-              :src="videoEmbed"
-              :title="post.title"
-              frameborder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowfullscreen
-            />
-          </div>
-          <v-img v-else-if="post.image_url" :src="post.image_url" max-height="480" cover />
+            <!-- Publicación -->
+            <v-card v-else-if="post" flat class="rounded-lg overflow-hidden bg-white">
+              <!-- Video: reproductor arriba; artículo: portada -->
+              <div v-if="post.type === 'video' && videoEmbed" class="video-wrapper">
+                <iframe
+                  :src="videoEmbed"
+                  :title="post.title"
+                  frameborder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowfullscreen
+                />
+              </div>
+              <v-img v-else-if="post.image_url" :src="post.image_url" max-height="480" cover />
 
-          <div class="pa-6 pa-md-10">
-            <div class="text-caption font-weight-bold text-primary text-uppercase mb-2">
-              {{ post.type === 'video' ? 'Video' : 'Artículo' }} · {{ formattedDate }}
-            </div>
-            <h1 class="text-h4 font-weight-black line-height-tight text-grey-darken-4 mb-6">
-              {{ post.title }}
-            </h1>
+              <div class="pa-6 pa-md-10">
+                <div class="text-caption font-weight-bold text-primary text-uppercase mb-2">
+                  {{ post.type === 'video' ? 'Video' : 'Artículo' }} · {{ formattedDate }}
+                </div>
+                <h1 class="text-h4 font-weight-black line-height-tight text-grey-darken-4 mb-6">
+                  {{ post.title }}
+                </h1>
 
-            <v-btn
-              v-if="post.type === 'video' && !videoEmbed && post.video_url"
-              :href="post.video_url"
-              target="_blank"
-              rel="noopener"
-              color="primary"
-              variant="flat"
-              class="text-none rounded-pill mb-6"
-              prepend-icon="mdi-play"
-            >
-              Ver video
-            </v-btn>
+                <v-btn
+                  v-if="post.type === 'video' && !videoEmbed && post.video_url"
+                  :href="post.video_url"
+                  target="_blank"
+                  rel="noopener"
+                  color="primary"
+                  variant="flat"
+                  class="text-none rounded-pill mb-6"
+                  prepend-icon="mdi-play"
+                >
+                  Ver video
+                </v-btn>
 
-            <!-- HTML del editor del panel (solo lo capturan administradores) -->
-            <div v-if="post.content" class="post-content" v-html="post.content" />
-          </div>
-        </v-card>
+                <!-- HTML del editor del panel (solo lo capturan administradores) -->
+                <div v-if="post.content" class="post-content" v-html="post.content" />
+              </div>
+            </v-card>
+          </v-col>
+
+          <!-- Columna derecha: patrocinadores -->
+          <v-col cols="12" lg="4">
+            <SponsoredAds :limit="3" placeholder />
+          </v-col>
+        </v-row>
       </v-container>
 
       <!-- PIE DE PÁGINA: redes y contacto -->
@@ -77,6 +78,8 @@ import { computed, ref, watch } from 'vue'
 import { usePublicBlogsStore, type PublicBlog } from '@/stores/publicBlogs'
 import { embedUrl } from '@/utils/video'
 import SiteFooter from '@/components/SiteFooter.vue'
+import SiteHeader from '@/components/SiteHeader.vue'
+import SponsoredAds from '@/components/SponsoredAds.vue'
 
 const props = defineProps<{ id: string, slug?: string }>()
 
