@@ -262,49 +262,29 @@
                   color="primary"
                   class="text-none font-weight-bold text-caption"
                   append-icon="mdi-chevron-right"
+                  :to="{ name: 'Standings' }"
                 >
                   Posiciones completas
                 </v-btn>
               </div>
 
-              <!-- Grid de tablas por división -->
-              <v-row>
+              <!-- Posiciones de torneos públicos al azar -->
+              <v-row v-if="standingsLoading">
+                <v-col v-for="n in 3" :key="n" cols="12" md="4">
+                  <v-skeleton-loader type="table-tbody" class="rounded-lg" />
+                </v-col>
+              </v-row>
+              <v-card v-else-if="!featuredStandings.length" flat class="rounded-lg pa-6 text-center text-body-2 text-grey-darken-1">
+                Aún no hay torneos publicados.
+              </v-card>
+              <v-row v-else>
                 <v-col
-                  v-for="(division, divIdx) in standings"
-                  :key="divIdx"
+                  v-for="item in featuredStandings"
+                  :key="item.tournament.id"
                   cols="12"
-                  md="4"
+                  :md="featuredStandings.length === 1 ? 6 : 4"
                 >
-                  <v-card flat class="rounded-lg border pa-2 bg-white">
-                    <div class="text-subtitle-2 font-weight-bold text-grey-darken-3 px-3 py-1">
-                      {{ division.name }}
-                    </div>
-                    <v-table density="compact" class="standings-table">
-                      <thead>
-                        <tr>
-                          <th class="text-left text-xxs font-weight-bold text-grey">EQUIPO</th>
-                          <th class="text-center text-xxs font-weight-bold text-grey">G</th>
-                          <th class="text-center text-xxs font-weight-bold text-grey">P</th>
-                          <th class="text-center text-xxs font-weight-bold text-grey">%</th>
-                          <th class="text-center text-xxs font-weight-bold text-grey">DIF</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="(team, teamIdx) in division.teams" :key="teamIdx">
-                          <td class="text-left font-weight-bold text-caption py-1">
-                            <v-avatar size="18" class="mr-2" :color="team.color">
-                              <span class="text-xxs text-white font-weight-bold">{{ team.logoChar }}</span>
-                            </v-avatar>
-                            {{ team.name }}
-                          </td>
-                          <td class="text-center text-caption font-weight-medium">{{ team.w }}</td>
-                          <td class="text-center text-caption font-weight-medium">{{ team.l }}</td>
-                          <td class="text-center text-caption font-weight-medium text-grey-darken-1">{{ team.pct }}</td>
-                          <td class="text-center text-caption font-weight-medium text-grey-darken-1">{{ team.gb }}</td>
-                        </tr>
-                      </tbody>
-                    </v-table>
-                  </v-card>
+                  <StandingsCard :data="item" />
                 </v-col>
               </v-row>
             </div>
@@ -341,6 +321,9 @@
                 </v-list-item>
               </v-list>
             </v-card>
+
+            <!-- BLOQUE: LÍDERES DE UN TORNEO AL AZAR -->
+            <StatLeaders />
 
             <!-- BLOQUE: PUBLICIDAD DE PATROCINADORES (al azar entre la vigente) -->
             <SponsoredAds />
@@ -388,6 +371,9 @@ import { videoThumbnail } from '@/utils/video'
 import SponsoredAds from '@/components/SponsoredAds.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import ScoresTicker from '@/components/ScoresTicker.vue'
+import StandingsCard from '@/components/StandingsCard.vue'
+import StatLeaders from '@/components/StatLeaders.vue'
+import { usePublicGamesStore } from '@/stores/publicGames'
 
 const authStore = useAuthStore();
 
@@ -406,7 +392,7 @@ console.log(authStore.user);
 // (solo Resultados y Calendario tienen página por ahora)
 const mainLinks = [
   { title: 'RESULTADOS', to: { name: 'Results' } },
-  { title: 'POSICIONES' },
+  { title: 'POSICIONES', to: { name: 'Standings' } },
   { title: 'CALENDARIO', to: { name: 'Results' } },
   { title: 'ESTADÍSTICAS' },
   { title: 'JUGADORES' },
@@ -428,41 +414,23 @@ const formatPostDate = (value) => value
 
 onMounted(() => {
   blogsStore.fetchLatest()
+  loadStandings()
 })
 
-// SECCIÓN: Posiciones (Estructura de tablas por División)
-const standings = ref([
-  {
-    name: 'Este de la L.A.',
-    teams: [
-      { name: 'TB', logoChar: 'TB', color: '#092C5C', w: 56, l: 38, pct: '.596', gb: '-' },
-      { name: 'NYY', logoChar: 'NY', color: '#0C2340', w: 54, l: 42, pct: '.563', gb: '3.0' },
-      { name: 'BOS', logoChar: 'B', color: '#BD3039', w: 46, l: 48, pct: '.489', gb: '10.0' },
-      { name: 'BAL', logoChar: 'O', color: '#DF4601', w: 46, l: 51, pct: '.474', gb: '11.5' },
-      { name: 'TOR', logoChar: 'B', color: '#134A8E', w: 45, l: 51, pct: '.469', gb: '12.0' }
-    ]
-  },
-  {
-    name: 'Central de la L.A.',
-    teams: [
-      { name: 'CWS', logoChar: 'SO', color: '#27251F', w: 50, l: 45, pct: '.526', gb: '-' },
-      { name: 'CLE', logoChar: 'C', color: '#E31937', w: 51, l: 46, pct: '.526', gb: '-' },
-      { name: 'MIN', logoChar: 'M', color: '#0C2340', w: 48, l: 49, pct: '.495', gb: '3.0' },
-      { name: 'DET', logoChar: 'D', color: '#0C2340', w: 44, l: 52, pct: '.458', gb: '6.5' },
-      { name: 'KC', logoChar: 'KC', color: '#004687', w: 38, l: 59, pct: '.392', gb: '13.0' }
-    ]
-  },
-  {
-    name: 'Oeste de la L.A.',
-    teams: [
-      { name: 'TEX', logoChar: 'T', color: '#003278', w: 49, l: 47, pct: '.510', gb: '-' },
-      { name: 'SEA', logoChar: 'S', color: '#0C2C56', w: 48, l: 49, pct: '.495', gb: '1.5' },
-      { name: 'HOU', logoChar: 'H', color: '#EB6E1F', w: 47, l: 51, pct: '.480', gb: '3.0' },
-      { name: 'ATH', logoChar: 'A', color: '#003831', w: 41, l: 55, pct: '.427', gb: '8.0' },
-      { name: 'LAA', logoChar: 'A', color: '#BA0021', w: 38, l: 59, pct: '.392', gb: '11.5' }
-    ]
+// SECCIÓN: Posiciones de torneos públicos (al azar, primero los que ya tienen juegos)
+const publicGamesStore = usePublicGamesStore()
+const featuredStandings = ref([])
+const standingsLoading = ref(true)
+
+const loadStandings = async () => {
+  try {
+    featuredStandings.value = await publicGamesStore.fetchFeaturedStandings(3)
+  } catch (error) {
+    console.error('Error al cargar las posiciones:', error)
+  } finally {
+    standingsLoading.value = false
   }
-])
+}
 
 // SECCIÓN ADICIONAL: Juego de Estrellas 2026 (Columna Derecha)
 const allStarNews = ref([

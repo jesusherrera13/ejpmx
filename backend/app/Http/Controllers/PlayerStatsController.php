@@ -17,7 +17,7 @@ class PlayerStatsController extends Controller
 {
     use ExportsTables;
 
-    private const SUMS = ['pa', 'ab', 'r', 'h', 'doubles', 'triples', 'hr', 'rbi', 'bb', 'hbp', 'sf', 'so'];
+    private const SUMS = ['pa', 'ab', 'r', 'h', 'doubles', 'triples', 'hr', 'rbi', 'bb', 'hbp', 'sf', 'so', 'sb'];
 
     public function index(Request $request, Tournament $tournament)
     {
@@ -75,7 +75,7 @@ class PlayerStatsController extends Controller
     /**
      * Bateo por jugador a la fecha del request (sin fecha, hoy).
      */
-    private function stats(Request $request, Tournament $tournament): array
+    public function stats(Request $request, Tournament $tournament): array
     {
         $date = $request->validate(['date' => 'nullable|date_format:Y-m-d'])['date'] ?? Carbon::today()->toDateString();
 

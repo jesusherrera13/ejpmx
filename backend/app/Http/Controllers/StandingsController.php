@@ -86,7 +86,7 @@ class StandingsController extends Controller
     /**
      * Tabla a la fecha del request (sin fecha, la del último partido jugado).
      */
-    private function standings(Request $request, Tournament $tournament): array
+    public function standings(Request $request, Tournament $tournament): array
     {
         $request->validate(['date' => 'nullable|date_format:Y-m-d']);
 

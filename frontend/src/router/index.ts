@@ -7,6 +7,7 @@ import TournamentConfigurationView from '@/views/TournamentConfigurationView.vue
 import GameBoxscoreView from '@/views/GameBoxscoreView.vue'
 import BlogPostView from '@/views/BlogPostView.vue'
 import ResultsView from '@/views/ResultsView.vue'
+import StandingsView from '@/views/StandingsView.vue'
 
 const routes = [
   {
@@ -25,6 +26,12 @@ const routes = [
     path: '/resultados',
     name: 'Results',
     component: ResultsView
+  },
+  {
+    // Posiciones públicas: varios torneos al azar o la tabla completa de uno (?torneo=)
+    path: '/posiciones',
+    name: 'Standings',
+    component: StandingsView
   },
   {
     path: '/login',

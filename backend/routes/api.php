@@ -9,6 +9,7 @@ use App\Http\Controllers\BlogController;
 use App\Http\Controllers\PublicBlogController;
 use App\Http\Controllers\PublicAdvertisingController;
 use App\Http\Controllers\PublicGameController;
+use App\Http\Controllers\PublicStatsController;
 use App\Http\Controllers\SponsorController;
 use App\Http\Controllers\AdvertisingController;
 use App\Http\Controllers\ContentTypeController;
@@ -39,6 +40,9 @@ Route::get('/public/advertising', [PublicAdvertisingController::class, 'index'])
 Route::get('/public/tournaments', [PublicGameController::class, 'tournaments']);
 Route::get('/public/tournaments/{tournament}/dates', [PublicGameController::class, 'dates']);
 Route::get('/public/tournaments/{tournament}/games', [PublicGameController::class, 'games']);
+Route::get('/public/tournaments/{tournament}/standings', [PublicStatsController::class, 'standings']);
+Route::get('/public/standings/featured', [PublicStatsController::class, 'featuredStandings']);
+Route::get('/public/leaders', [PublicStatsController::class, 'leaders']);
 
 Route::group(['middleware' => ['auth:sanctum']], function() {
 
