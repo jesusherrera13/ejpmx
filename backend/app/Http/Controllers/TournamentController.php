@@ -28,6 +28,7 @@ class TournamentController extends Controller
     {
         $validated = $request->validate($this->rules());
         $validated['is_active'] = $request->boolean('is_active', true);
+        $validated['is_public'] = $request->boolean('is_public', false);
         $validated['games_per_series'] ??= 3;
         $validated['user_id'] = $request->user()->id;
 
@@ -50,6 +51,9 @@ class TournamentController extends Controller
         $validated = $request->validate($this->rules($tournament));
         if ($request->has('is_active')) {
             $validated['is_active'] = $request->boolean('is_active');
+        }
+        if ($request->has('is_public')) {
+            $validated['is_public'] = $request->boolean('is_public');
         }
 
         $tournament->update($validated);
@@ -131,6 +135,7 @@ class TournamentController extends Controller
             'name' => [...explode('|', $required), 'string', 'max:150', Rule::unique('tournaments', 'name')->where('user_id', $tournament?->user_id ?? auth()->id())->whereNull('deleted_at')->ignore($tournament?->id)],
             'games_per_series' => ['integer', Rule::in(Tournament::GAMES_PER_SERIES_OPTIONS)],
             'is_active' => 'boolean',
+            'is_public' => 'boolean',
         ];
     }
 }

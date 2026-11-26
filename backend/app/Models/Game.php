@@ -21,6 +21,7 @@ class Game extends Model
         'home_team_id',
         'away_team_id',
         'scheduled_at',
+        'status',
         'home_score',
         'away_score',
         'boxscore_mode',
@@ -40,6 +41,38 @@ class Game extends Model
 
     // Modalidades de captura del box score, de la más simple a la más completa
     public const BOXSCORE_MODES = ['score', 'linescore', 'batting', 'batting_full', 'scorecard'];
+
+    // Estados que marca el organizador. "scheduled" deja que el portal deduzca el estado del marcador.
+    public const STATUSES = ['scheduled', 'in_progress', 'final', 'postponed', 'suspended', 'cancelled'];
+
+    /**
+     * Estado que se muestra en el portal. El marcado a mano manda; con "scheduled" se deduce:
+     * con carreras capturadas y fecha pasada es Final (si no hay empate), el mismo día es En juego.
+     */
+    public function effectiveStatus(): string
+    {
+        if (($this->status ?? 'scheduled') !== 'scheduled') {
+            return $this->status;
+        }
+
+        $hasScore = $this->home_score !== null && $this->away_score !== null;
+        if (! $hasScore || ! $this->scheduled_at) {
+            return 'scheduled';
+        }
+
+        $day = $this->scheduled_at->toDateString();
+        $today = now()->toDateString();
+
+        if ($day > $today) {
+            return 'scheduled';
+        }
+
+        if ($day < $today && $this->home_score !== $this->away_score) {
+            return 'final';
+        }
+
+        return 'in_progress';
+    }
 
     // "19:30", o null si el partido aún no tiene hora (00:00)
     public function scheduledTime(): ?string

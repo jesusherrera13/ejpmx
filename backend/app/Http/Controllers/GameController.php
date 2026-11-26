@@ -320,7 +320,7 @@ class GameController extends Controller
     }
 
     /**
-     * Cambia los equipos que se enfrentan y la fecha y hora de un partido.
+     * Cambia los equipos que se enfrentan, la fecha y hora y el estado de un partido.
      */
     public function update(Request $request, Tournament $tournament, Game $game)
     {
@@ -333,6 +333,7 @@ class GameController extends Controller
             'away_team_id' => ['required', 'integer', Rule::in($teamIds)],
             'home_team_id' => ['required', 'integer', Rule::in($teamIds), 'different:away_team_id'],
             'scheduled_at' => 'required|date_format:Y-m-d H:i',
+            'status' => ['sometimes', 'required', Rule::in(Game::STATUSES)],
         ], [
             'home_team_id.different' => 'El equipo local debe ser distinto al visitante.',
             '*.in' => 'El equipo seleccionado no está inscrito en el torneo.',
@@ -340,6 +341,7 @@ class GameController extends Controller
             'away_team_id' => 'visitante',
             'home_team_id' => 'local',
             'scheduled_at' => 'fecha y hora',
+            'status' => 'estado',
         ]);
 
         DB::transaction(function () use ($game, $validated) {

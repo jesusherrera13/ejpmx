@@ -57,6 +57,18 @@
                 />
               </v-col>
 
+              <!-- Is Public: aparece en el portal (ticker de partidos y Resultados) -->
+              <v-col cols="12">
+                <v-switch
+                  v-model="formData.is_public"
+                  label="Mostrar en el portal público"
+                  color="primary"
+                  density="compact"
+                  hint="Sus partidos y resultados aparecen en la página principal y en Resultados"
+                  persistent-hint
+                />
+              </v-col>
+
             </v-row>
           </v-container>
         </v-form>
@@ -106,7 +118,8 @@ const defaultForm = {
   id: null,
   name: '',
   games_per_series: 3,
-  is_active: true
+  is_active: true,
+  is_public: false
 }
 
 const formData = ref({ ...defaultForm })
@@ -126,7 +139,8 @@ watch(
         id: newTournament.id ?? null,
         name: newTournament.name ?? '',
         games_per_series: newTournament.games_per_series ?? 3,
-        is_active: newTournament.is_active ?? true
+        is_active: newTournament.is_active ?? true,
+        is_public: newTournament.is_public ?? false
       }
     } else {
       formData.value = { ...defaultForm }

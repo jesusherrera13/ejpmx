@@ -8,6 +8,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\PublicBlogController;
 use App\Http\Controllers\PublicAdvertisingController;
+use App\Http\Controllers\PublicGameController;
 use App\Http\Controllers\SponsorController;
 use App\Http\Controllers\AdvertisingController;
 use App\Http\Controllers\ContentTypeController;
@@ -33,6 +34,11 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::get('/public/blogs', [PublicBlogController::class, 'index']);
 Route::get('/public/blogs/{blog}', [PublicBlogController::class, 'show']);
 Route::get('/public/advertising', [PublicAdvertisingController::class, 'index']);
+
+// Portal público: calendario y resultados de los torneos públicos
+Route::get('/public/tournaments', [PublicGameController::class, 'tournaments']);
+Route::get('/public/tournaments/{tournament}/dates', [PublicGameController::class, 'dates']);
+Route::get('/public/tournaments/{tournament}/games', [PublicGameController::class, 'games']);
 
 Route::group(['middleware' => ['auth:sanctum']], function() {
 

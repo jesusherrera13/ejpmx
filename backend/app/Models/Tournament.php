@@ -19,6 +19,7 @@ class Tournament extends Model
         'games_per_series',
         'schedule_draft',
         'is_active',
+        'is_public',
     ];
 
     // El borrador del calendario solo se lee por su endpoint
@@ -28,6 +29,7 @@ class Tournament extends Model
         'games_per_series' => 'integer',
         'schedule_draft' => 'array',
         'is_active' => 'boolean',
+        'is_public' => 'boolean',
     ];
 
     // Valores permitidos para los juegos de cada serie

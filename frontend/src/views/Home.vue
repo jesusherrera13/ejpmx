@@ -9,8 +9,8 @@
       </div>
 
       <div class="d-none d-lg-flex ga-4 align-center">
-        <v-btn variant="text" class="text-capitalize font-weight-bold text-body-2" v-for="link in mainLinks" :key="link">
-          {{ link }}
+        <v-btn variant="text" class="text-capitalize font-weight-bold text-body-2" v-for="link in mainLinks" :key="link.title" :to="link.to">
+          {{ link.title }}
         </v-btn>
       </div>
 
@@ -124,106 +124,8 @@
       </div>
     </v-app-bar>
 
-    <!-- 1. MARCADOR SUPERIOR MULTI-ESTADO -->
-    <v-app-bar flat height="75" color="white" class="border-bottom px-4" order="2">
-      <div class="d-flex align-center w-100 overflow-hidden">
-        
-        <!-- Ticker Scroll Container con Soporte de Fechas Intercaladas -->
-        <div 
-          ref="tickerContainer"
-          class="d-flex ga-3 overflow-x-auto flex-grow-1 py-1 align-center hide-scrollbar scroll-smooth"
-        >
-          <!-- Iteramos sobre nuestra lista mezclada de fechas y partidos -->
-          <template v-for="(item, index) in tickerItems" :key="index">
-            
-            <!-- ELEMENTO TIPO FECHA -->
-            <div v-if="item.type === 'date'" class="text-center mx-2 border-end pr-4 flex-shrink-0">
-              <div class="text-caption font-weight-bold text-black line-height-tight">{{ item.day }}</div>
-              <div class="text-caption text-grey font-weight-bold line-height-tight">{{ item.month }}</div>
-            </div>
-
-            <!-- ELEMENTO TIPO PARTIDO -->
-            <v-card
-              v-else-if="item.type === 'game'"
-              variant="outlined"
-              color="grey-lighten-2"
-              class="flex-shrink-0"
-              width="170"
-            >
-              <v-card-text class="pa-2 text-black">
-                
-                <!-- CASO A: JUEGO FINALIZADO -->
-                <template v-if="item.status === 'FINAL'">
-                  <div class="text-xxs text-grey-darken-1 font-weight-bold mb-1">FINAL</div>
-                  
-                  <!-- Visitante (Away) -->
-                  <div class="d-flex align-center justify-space-between mb-1">
-                    <div class="d-flex align-center flex-grow-1 overflow-hidden">
-                      <v-avatar size="16" class="mr-1 flex-shrink-0" :image="item.awayLogo" />
-                      <!-- Ancho fijo para el nombre del equipo para alinear el récord -->
-                      <span class="text-caption font-weight-bold team-name-width text-truncate">{{ item.away }}</span>
-                      <span class="text-xxs text-grey-darken-1 ml-1">{{ item.awaySeriesRecord }}</span>
-                    </div>
-                    <span class="text-subtitle-2 font-weight-black ml-2">{{ item.awayScore }}</span>
-                  </div>
-                  
-                  <!-- Local (Home) -->
-                  <div class="d-flex align-center justify-space-between">
-                    <div class="d-flex align-center flex-grow-1 overflow-hidden">
-                      <v-avatar size="16" class="mr-1" :image="item.homeLogo" />
-                      <!-- Mismo ancho fijo aquí -->
-                      <span class="text-caption font-weight-bold team-name-width text-truncate">{{ item.home }}</span>
-                      <span class="text-xxs text-grey-darken-1 ml-1">{{ item.homeSeriesRecord }}</span>
-                    </div>
-                    <span class="text-subtitle-2 font-weight-black ml-2">{{ item.homeScore }}</span>
-                  </div>
-                </template>
-
-                <!-- CASO B: JUEGO PROGRAMADO -->
-                <template v-else>
-                  <div class="text-xxs text-grey-darken-1 font-weight-bold mb-1">{{ item.time }}</div>
-                  
-                  <!-- Visitante (Away) -->
-                  <div class="d-flex align-center justify-space-between mb-1">
-                    <div class="d-flex align-center flex-grow-1 overflow-hidden">
-                      <v-avatar size="16" class="mr-1 flex-shrink-0" :image="item.awayLogo" />
-                      <span class="text-caption font-weight-bold team-name-width text-truncate">{{ item.away }}</span>
-                      <span class="text-xxs text-grey ml-1">{{ item.awayRecord }}</span>
-                    </div>
-                  </div>
-                  
-                  <!-- Local (Home) -->
-                  <div class="d-flex align-center justify-space-between">
-                    <div class="d-flex align-center flex-grow-1 overflow-hidden">
-                      <v-avatar size="16" class="mr-1 flex-shrink-0" :image="item.homeLogo" />
-                      <span class="text-caption font-weight-bold team-name-width text-truncate">{{ item.home }}</span>
-                      <span class="text-xxs text-grey ml-1">{{ item.homeRecord }}</span>
-                    </div>
-                  </div>
-                </template>
-
-              </v-card-text>
-            </v-card>
-          </template>
-        </div>
-
-        <!-- Navegación del Ticker -->
-        <div class="d-flex ga-1 pl-3 border-start bg-white z-10 flex-shrink-0">
-          <v-btn 
-            icon="mdi-chevron-left" 
-            variant="plain" 
-            size="small" 
-            @click="scrollTicker('left')"
-          />
-          <v-btn 
-            icon="mdi-chevron-right" 
-            variant="plain" 
-            size="small" 
-            @click="scrollTicker('right')"
-          />
-        </div>
-      </div>
-    </v-app-bar>
+    <!-- 1. MARCADOR SUPERIOR: partidos reales de los torneos públicos -->
+    <ScoresTicker />
 
     <!-- 3. CONTENIDO PRINCIPAL -->
     <v-main>
@@ -485,6 +387,7 @@ import { usePublicBlogsStore } from '@/stores/publicBlogs'
 import { videoThumbnail } from '@/utils/video'
 import SponsoredAds from '@/components/SponsoredAds.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
+import ScoresTicker from '@/components/ScoresTicker.vue'
 
 const authStore = useAuthStore();
 
@@ -499,125 +402,15 @@ console.log(authStore.user);
   }
 }) */
 
-// Referencia al contenedor HTML del Ticker
-const tickerContainer = ref(null)
-
-// Función para desplazar horizontalmente el Ticker
-const scrollTicker = (direction) => {
-  if (!tickerContainer.value) return
-  
-  // Distancia a desplazar: 172px equivale al ancho de una tarjeta (160px) + el gap (12px)
-  // Puedes cambiar el multiplicador (ej. 172 * 3) si prefieres que salte de 3 en 3 partidos
-  const scrollAmount = 172 * 2 
-  
-  if (direction === 'left') {
-    tickerContainer.value.scrollLeft -= scrollAmount
-  } else {
-    tickerContainer.value.scrollLeft += scrollAmount
-  }
-}
-
 // Enlaces navegación principal
-const mainLinks = ref([
-  'RESULTADOS',
-  'POSICIONES',
-  'CALENDARIO',
-  'ESTADÍSTICAS',
-  'JUGADORES',
-])
-
-// Estructura de datos mixta para Fechas y Partidos (Finalizados vs Programados)
-const tickerItems = ref([
-  // Bloque del 14 de Julio
-  { type: 'date', day: '14', month: 'JUL' },
-  { 
-    type: 'game', 
-    status: 'FINAL', 
-    away: 'AL', 
-    awayLogo: 'https://placehold.co/16', 
-    awaySeriesRecord: '1-0', 
-    awayScore: '4', 
-    home: 'NL', 
-    homeLogo: 'https://placehold.co/16', 
-    homeSeriesRecord: '0-1', 
-    homeScore: '0' 
-  },
-  { 
-    type: 'game', 
-    status: 'FINAL', 
-    away: 'ESC', 
-    awayLogo: 'https://placehold.co/16', 
-    awaySeriesRecord: '1-0', 
-    awayScore: '2', 
-    home: 'SUT', 
-    homeLogo: 'https://placehold.co/16', 
-    homeSeriesRecord: '0-1', 
-    homeScore: '3' 
-  },
-
-  // Bloque del 16 de Julio
-  { type: 'date', day: '16', month: 'JUL' },
-  { 
-    type: 'game', 
-    status: 'FINAL', 
-    away: 'NYM', 
-    awayLogo: 'https://placehold.co/16', 
-    awaySeriesRecord: '41-57', 
-    awayScore: '4', 
-    home: 'PHI', 
-    homeLogo: 'https://placehold.co/16', 
-    homeSeriesRecord: '54-44', 
-    homeScore: '1' 
-  },
-  { 
-    type: 'game', 
-    status: 'FINAL', 
-    away: 'TM1', 
-    awayLogo: 'https://placehold.co/16', 
-    awaySeriesRecord: '41-57', 
-    awayScore: '4', 
-    home: 'TM2', 
-    homeLogo: 'https://placehold.co/16', 
-    homeSeriesRecord: '54-44', 
-    homeScore: '5' 
-  },
-
-  // Bloque del 17 de Julio
-  { type: 'date', day: '17', month: 'JUL' },
-  { 
-    type: 'game', 
-    status: 'SCHEDULED', 
-    time: '7:05 PM ET', 
-    away: 'LAD', 
-    awayLogo: 'https://placehold.co/16', 
-    awayRecord: '61-36', 
-    home: 'NYY', 
-    homeLogo: 'https://placehold.co/16', 
-    homeRecord: '54-42' 
-  },
-  { 
-    type: 'game', 
-    status: 'SCHEDULED', 
-    time: '7:10 PM ET', 
-    away: 'PIT', 
-    awayLogo: 'https://placehold.co/16', 
-    awayRecord: '50-47', 
-    home: 'CLE', 
-    homeLogo: 'https://placehold.co/16', 
-    homeRecord: '51-46' 
-  },
-  { 
-    type: 'game', 
-    status: 'SCHEDULED', 
-    time: '7:15 PM ET', 
-    away: 'TEX', 
-    awayLogo: 'https://placehold.co/16', 
-    awayRecord: '49-47', 
-    home: 'ATL', 
-    homeLogo: 'https://placehold.co/16', 
-    homeRecord: '55-40' 
-  }
-])
+// (solo Resultados y Calendario tienen página por ahora)
+const mainLinks = [
+  { title: 'RESULTADOS', to: { name: 'Results' } },
+  { title: 'POSICIONES' },
+  { title: 'CALENDARIO', to: { name: 'Results' } },
+  { title: 'ESTADÍSTICAS' },
+  { title: 'JUGADORES' },
+]
 
 // Publicaciones del panel de administración (artículos y videos publicados)
 const blogsStore = usePublicBlogsStore()

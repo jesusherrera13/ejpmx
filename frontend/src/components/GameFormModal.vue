@@ -67,6 +67,17 @@
                 :rules="[v => !!v || 'La hora es requerida']"
               />
             </v-col>
+            <v-col cols="12">
+              <v-select
+                v-model="formData.status"
+                :items="statusOptions"
+                label="Estado"
+                variant="outlined"
+                density="comfortable"
+                hint="Con «Automático» el portal muestra En juego o Final según el marcador capturado"
+                persistent-hint
+              />
+            </v-col>
           </v-row>
         </v-form>
       </v-card-text>
@@ -112,6 +123,16 @@ const emit = defineEmits(['update:modelValue', 'save'])
 const formRef = ref(null)
 const formData = ref({})
 
+// Estado que se muestra en el portal público
+const statusOptions = [
+  { title: 'Automático (según el marcador)', value: 'scheduled' },
+  { title: 'En juego', value: 'in_progress' },
+  { title: 'Final', value: 'final' },
+  { title: 'Pospuesto', value: 'postponed' },
+  { title: 'Suspendido', value: 'suspended' },
+  { title: 'Cancelado', value: 'cancelled' }
+]
+
 const dialog = computed({
   get: () => props.modelValue,
   set: (val) => emit('update:modelValue', val)
@@ -128,7 +149,8 @@ watch(
       away_team_id: game.away_team_id,
       home_team_id: game.home_team_id,
       date: game.scheduled_at.substring(0, 10),
-      time: game.scheduled_at.substring(11, 16)
+      time: game.scheduled_at.substring(11, 16),
+      status: game.status ?? 'scheduled'
     }
   },
   { immediate: true }
@@ -150,7 +172,8 @@ const handleSubmit = async () => {
   emit('save', {
     away_team_id: formData.value.away_team_id,
     home_team_id: formData.value.home_team_id,
-    scheduled_at: `${formData.value.date} ${formData.value.time}`
+    scheduled_at: `${formData.value.date} ${formData.value.time}`,
+    status: formData.value.status
   })
 }
 </script>

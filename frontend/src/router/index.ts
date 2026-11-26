@@ -5,6 +5,7 @@ import Login from '@/views/Login.vue'
 import AdminDashboardView from '@/views/AdminDashboardView.vue'
 import TournamentConfigurationView from '@/views/TournamentConfigurationView.vue'
 import BlogPostView from '@/views/BlogPostView.vue'
+import ResultsView from '@/views/ResultsView.vue'
 
 const routes = [
   {
@@ -17,6 +18,12 @@ const routes = [
     name: 'BlogPost',
     component: BlogPostView,
     props: true
+  },
+  {
+    // Calendario y resultados públicos (?torneo=&fecha=&equipo=)
+    path: '/resultados',
+    name: 'Results',
+    component: ResultsView
   },
   {
     path: '/login',
